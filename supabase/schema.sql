@@ -501,6 +501,80 @@ begin
 end $$;
 
 -- =========================================================
+-- API: ครูดูผลสอบ (Phase 4)
+-- =========================================================
+
+-- ผลสอบทั้งชุด: สรุป + รายคน (นักเรียนที่ลงทะเบียนทุกคน) + วิเคราะห์รายข้อ
+create or replace function public.api_exam_results(p_line_user_id text, p_exam_id uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare e exams; v_rows jsonb; v_summary jsonb; v_questions jsonb;
+begin
+  perform qz_teacher(p_line_user_id);
+  select * into e from exams where id = p_exam_id;
+  if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+
+  -- รายคน: นักเรียนที่ลงทะเบียนแล้วทุกคน + ทุกคนที่เคยเริ่มสอบชุดนี้
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'student_code', p.student_code, 'full_name', p.full_name, 'display_name', p.display_name,
+      'status', case
+        when a.id is null then 'not_started'
+        when a.submitted_at is not null then 'submitted'
+        when now() > a.deadline_at + interval '60 seconds' then 'expired'
+        else 'in_progress' end,
+      'score', a.score, 'max_score', a.max_score, 'correct_count', a.correct_count,
+      'percent', case when a.submitted_at is null then null when coalesce(a.max_score, 0) = 0 then 0 else round(a.score * 100.0 / a.max_score) end,
+      'passed', case when a.submitted_at is null then null else coalesce(a.score * 100.0 / nullif(a.max_score, 0), 0) >= e.pass_percent end,
+      'started_at', a.started_at, 'submitted_at', a.submitted_at, 'is_late', coalesce(a.is_late, false)
+    ) order by p.student_code nulls last, p.full_name), '[]'::jsonb)
+  into v_rows
+  from profiles p
+  left join attempts a on a.profile_id = p.id and a.exam_id = e.id
+  where (p.role = 'student' and p.full_name is not null) or a.id is not null;
+
+  select jsonb_build_object(
+      'student_count', jsonb_array_length(v_rows),
+      'started_count', count(a.id),
+      'submitted_count', count(a.submitted_at),
+      'avg_score', round(avg(a.score) filter (where a.submitted_at is not null), 1),
+      'max_score_got', max(a.score) filter (where a.submitted_at is not null),
+      'min_score_got', min(a.score) filter (where a.submitted_at is not null),
+      'avg_percent', round(avg(a.score * 100.0 / nullif(a.max_score, 0)) filter (where a.submitted_at is not null)),
+      'pass_count', count(*) filter (where a.submitted_at is not null and coalesce(a.score * 100.0 / nullif(a.max_score, 0), 0) >= e.pass_percent),
+      'late_count', count(*) filter (where a.is_late))
+  into v_summary
+  from attempts a where a.exam_id = e.id;
+
+  -- รายข้อ: คนที่ส่งแล้วตอบถูก/ผิดกี่คน และเลือกตัวเลือกไหนบ้าง (ไม่ตอบ = ผิด)
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'order_no', q.order_no, 'question_text', q.question_text, 'correct_answer', q.correct_answer, 'points', q.points,
+      'option_a', q.option_a, 'option_b', q.option_b, 'option_c', q.option_c, 'option_d', q.option_d,
+      'submitted', s.n, 'correct', s.correct,
+      'wrong_percent', case when s.n = 0 then 0 else round((s.n - s.correct) * 100.0 / s.n) end,
+      'choices', jsonb_build_object('A', s.ca, 'B', s.cb, 'C', s.cc, 'D', s.cd, 'none', s.n - s.ca - s.cb - s.cc - s.cd)
+    ) order by q.order_no), '[]'::jsonb)
+  into v_questions
+  from questions q
+  cross join lateral (
+    select count(*) as n,
+           count(*) filter (where a.answers->>q.id::text = q.correct_answer) as correct,
+           count(*) filter (where a.answers->>q.id::text = 'A') as ca,
+           count(*) filter (where a.answers->>q.id::text = 'B') as cb,
+           count(*) filter (where a.answers->>q.id::text = 'C') as cc,
+           count(*) filter (where a.answers->>q.id::text = 'D') as cd
+    from attempts a where a.exam_id = e.id and a.submitted_at is not null
+  ) s
+  where q.exam_id = e.id;
+
+  return jsonb_build_object(
+    'exam', jsonb_build_object(
+      'id', e.id, 'title', e.title, 'duration_minutes', e.duration_minutes, 'pass_percent', e.pass_percent,
+      'open_at', e.open_at, 'close_at', e.close_at, 'status', qz_exam_status(e),
+      'question_count', jsonb_array_length(v_questions),
+      'max_score', (select coalesce(sum(points), 0) from questions where exam_id = e.id)),
+    'summary', v_summary, 'rows', v_rows, 'questions', v_questions);
+end $$;
+
+-- =========================================================
 -- สิทธิ์: ฟังก์ชัน api_* และ qz_* เรียกได้เฉพาะ service_role (Edge Function)
 -- =========================================================
 do $$

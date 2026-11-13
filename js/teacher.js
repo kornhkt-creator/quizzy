@@ -307,15 +307,237 @@ async function withBusy(btn, fn) {
 }
 
 // =========================================================
-// ผลสอบ / นำเข้า (Phase 4)
+// ผลสอบ
 // =========================================================
-function viewResults() {
-  shell(`<div class="main-head"><div><h1>ผลสอบ</h1></div></div>${stateHtml({ img: 'sleep', title: 'เร็ว ๆ นี้', text: 'หน้าผลสอบจะเปิดใน Phase 4' })}`);
+async function viewResults({ id } = {}) {
+  shell(loadingHtml());
+  try {
+    const exams = (await api('teacher_list_exams')).filter((e) => e.started_count > 0);
+    if (!id) {
+      main().innerHTML = `
+        <div class="main-head"><div><h1>ผลสอบ</h1><p>เลือกชุดสอบที่ต้องการดูผล</p></div></div>
+        ${exams.length ? `<div style="display:flex;flex-direction:column;gap:10px">${exams.map((e) => `
+          <button class="card list-row" data-go="results" data-id="${e.id}">
+            <div class="tile g">${icon('chart')}</div>
+            <div class="t"><b>${esc(e.title)}</b><small>ส่งแล้ว ${e.submitted_count}/${e.student_count} คน · ${e.question_count} ข้อ</small></div>
+            <span class="btn btn-secondary btn-sm">ดูผล</span>
+          </button>`).join('')}</div>`
+        : stateHtml({ img: 'sleep', title: 'ยังไม่มีผลสอบ', text: 'เมื่อนักเรียนเริ่มทำข้อสอบ ผลจะขึ้นที่นี่' })}`;
+      return;
+    }
+    state.results = await api('exam_results', { exam_id: id });
+    renderResults(exams);
+  } catch (err) { main().innerHTML = errorState(err); }
 }
 
-function viewImport() {
-  shell(`<div class="main-head"><div><h1>นำเข้าข้อสอบจาก Excel</h1></div></div>${stateHtml({ img: 'sleep', title: 'เร็ว ๆ นี้', text: 'การนำเข้า Excel จะเปิดใน Phase 4' })}`);
+const ROW_STATUS = {
+  in_progress: '<span class="pill orange">กำลังทำ</span>',
+  expired: '<span class="pill gray">ไม่ได้ส่ง</span>',
+  not_started: '<span class="pill gray">ยังไม่เริ่ม</span>',
+};
+
+function renderResults(exams) {
+  const { exam, summary: s, rows, questions } = state.results;
+  const hardest = questions.filter((q) => q.submitted > 0).sort((a, b) => b.wrong_percent - a.wrong_percent || a.order_no - b.order_no).slice(0, 5);
+  const when = [exam.open_at && `เปิด ${fmtDate(exam.open_at)}`, exam.close_at && `ปิด ${fmtDate(exam.close_at)}`].filter(Boolean).join(' – ');
+  const stat = (ic, g, big, small) => `<div class="card stat"><div class="tile ${g ? 'g' : ''}">${icon(ic)}</div><div><b>${big}</b><small>${small}</small></div></div>`;
+
+  main().innerHTML = `
+    <div class="main-head">
+      <div>
+        <h1>ผลสอบ: ${esc(exam.title)}</h1>
+        <p>${when ? `${esc(when)} · ` : ''}${exam.question_count} ข้อ · ${exam.max_score} คะแนน · เกณฑ์ผ่าน ${exam.pass_percent}%</p>
+      </div>
+      <div class="head-actions">
+        ${exams.length > 1 ? `<select class="input" data-act="switch-results" style="width:auto;min-height:42px">${exams.map((e) => `<option value="${e.id}" ${e.id === exam.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select>` : ''}
+        <button class="btn btn-secondary" data-act="export">${icon('download')}Export Excel</button>
+      </div>
+    </div>
+    <div class="stats">
+      ${stat('users', true, `${s.submitted_count}<span class="muted" style="font-size:16px">/${s.student_count}</span>`, 'ส่งแล้ว')}
+      ${stat('chart', false, s.avg_score ?? '-', `คะแนนเฉลี่ย${s.avg_percent != null ? ` (${s.avg_percent}%)` : ''}`)}
+      ${stat('star', true, s.max_score_got ?? '-', 'สูงสุด')}
+      ${stat('check', false, `${s.pass_count}<span class="muted" style="font-size:16px">/${s.submitted_count}</span>`, `ผ่านเกณฑ์ · ต่ำสุด ${s.min_score_got ?? '-'}`)}
+    </div>
+    <div class="cols">
+      <div class="card table-wrap" style="padding:8px 8px 4px">
+        <table>
+          <tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>คะแนน</th><th>ส่งเมื่อ</th><th>สถานะ</th></tr>
+          ${rows.map((r) => `
+            <tr>
+              <td>${esc(r.student_code || '-')}</td>
+              <td>${esc(r.full_name || r.display_name || '-')}</td>
+              <td>${r.status === 'submitted' ? `<b>${r.score}</b> / ${r.max_score}` : '<span class="muted">–</span>'}</td>
+              <td>${r.submitted_at ? fmtDate(r.submitted_at) : '<span class="muted">–</span>'}</td>
+              <td>${r.status === 'submitted' ? `<span class="pill ${r.passed ? 'green' : 'red'}">${r.passed ? 'ผ่าน' : 'ไม่ผ่าน'}</span>` : ROW_STATUS[r.status]}
+                ${r.is_late ? ' <span class="pill orange">ส่งช้า</span>' : ''}</td>
+            </tr>`).join('')}
+        </table>
+        ${rows.length ? '' : '<p class="muted center" style="padding:20px">ยังไม่มีนักเรียนลงทะเบียน</p>'}
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-weight:600;margin-bottom:2px">ข้อที่ตอบผิดมากที่สุด</div>
+        <div class="muted" style="font-size:13px;margin-bottom:14px">ใช้ดูว่าเรื่องไหนควรสอนซ้ำ</div>
+        ${hardest.length ? hardest.map((q) => `
+          <div class="bar-row">
+            <div class="top"><div>ข้อ ${q.order_no}: ${esc(q.question_text.length > 40 ? `${q.question_text.slice(0, 40)}…` : q.question_text)}</div><span>ผิด ${q.wrong_percent}%</span></div>
+            <div class="progress"><i style="width:${q.wrong_percent}%"></i></div>
+          </div>`).join('') : '<p class="muted" style="font-size:14px">ยังไม่มีคนส่งคำตอบ</p>'}
+      </div>
+    </div>`;
 }
+
+// =========================================================
+// นำเข้าข้อสอบจาก Excel
+// =========================================================
+async function viewImport({ id } = {}) {
+  state.imp = { target: id || '', exams: [], rows: null, fileName: '', mode: 'append', title: '', duration: 15 };
+  shell(loadingHtml());
+  try {
+    state.imp.exams = (await api('teacher_list_exams')).filter((e) => e.started_count === 0);
+    if (id && !state.imp.exams.some((e) => e.id === id)) state.imp.target = '';
+    renderImportPick();
+  } catch (err) { main().innerHTML = errorState(err); }
+}
+
+const importHead = (step) => {
+  const s = (n, label) => `<div class="s ${n < step ? 'done' : n === step ? 'on' : ''}"><i>${n < step ? '✓' : n}</i>${label}</div>`;
+  return `
+    <div class="main-head">
+      <div><h1>นำเข้าข้อสอบจาก Excel</h1><p>กรอกข้อสอบใน Excel แล้วนำเข้าทีเดียว</p></div>
+      <div class="head-actions"><button class="btn btn-secondary" data-act="template">${icon('download')}ดาวน์โหลด Template</button></div>
+    </div>
+    <div class="steps">${s(1, 'เลือกไฟล์')}<hr>${s(2, 'ตรวจสอบข้อมูล')}<hr>${s(3, 'นำเข้าเสร็จ')}</div>`;
+};
+
+function renderImportPick() {
+  const imp = state.imp;
+  main().innerHTML = `
+    ${importHead(1)}
+    <div class="card form-grid" style="padding:18px">
+      <label class="field full"><span>นำเข้าไปที่ชุดสอบ</span>
+        <select data-imp="target">
+          <option value="">+ สร้างชุดสอบใหม่</option>
+          ${imp.exams.map((e) => `<option value="${e.id}" ${e.id === imp.target ? 'selected' : ''}>${esc(e.title)} (${e.question_count} ข้อ)</option>`).join('')}
+        </select>
+      </label>
+      <div class="full muted" style="font-size:13px;margin-top:-6px">ชุดสอบที่มีนักเรียนเริ่มสอบแล้วจะไม่อยู่ในรายการ เพราะแก้ข้อสอบไม่ได้</div>
+    </div>
+    <label class="drop" id="drop">
+      <img src="${mascot('front')}" alt="" style="height:80px">
+      <b style="color:var(--text);font-weight:500">ลากไฟล์ Excel มาวางที่นี่ หรือกดเพื่อเลือกไฟล์</b>
+      <span style="font-size:13px">รองรับ .xlsx .xls .csv · ไม่เกิน 200 ข้อ · ใช้หัวคอลัมน์ตาม Template</span>
+      <span class="btn btn-primary btn-sm" style="margin-top:6px">${icon('upload')}เลือกไฟล์</span>
+      <input type="file" accept=".xlsx,.xls,.csv" hidden data-imp="file">
+    </label>`;
+
+  const drop = document.getElementById('drop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('over');
+    if (e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+  });
+}
+
+async function handleImportFile(file) {
+  const imp = state.imp;
+  try {
+    const { readQuestionFile } = await import('./excel.js');
+    imp.rows = await readQuestionFile(file);
+    imp.fileName = file.name;
+    imp.title = file.name.replace(/\.(xlsx|xls|csv)$/i, '').slice(0, 200);
+    renderImportPreview();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function renderImportPreview() {
+  const imp = state.imp;
+  const good = imp.rows.filter((r) => !r.errors.length);
+  const bad = imp.rows.length - good.length;
+  const target = imp.exams.find((e) => e.id === imp.target);
+  const L = { A: 'A', B: 'B', C: 'C', D: 'D', 'ก': 'A', 'ข': 'B', 'ค': 'C', 'ง': 'D' };
+  const cell = (v) => (v ? esc(v) : '<span class="muted">–</span>');
+  main().innerHTML = `
+    ${importHead(2)}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="list-row"><div class="tile g">${icon('file')}</div><div class="t"><b>${esc(imp.fileName)}</b><small>${imp.rows.length} ข้อ → ${target ? esc(target.title) : 'ชุดสอบใหม่'}</small></div></div>
+      <div style="display:flex;gap:10px"><span class="pill green" style="font-size:14px;padding:6px 14px">ถูกต้อง ${good.length} ข้อ</span>${bad ? `<span class="pill red" style="font-size:14px;padding:6px 14px">ต้องแก้ ${bad} ข้อ</span>` : ''}</div>
+    </div>
+    ${target ? (target.question_count ? `
+      <div class="card" style="display:flex;gap:20px;flex-wrap:wrap;padding:12px 16px">
+        <span class="muted">ชุดนี้มีข้อสอบอยู่แล้ว ${target.question_count} ข้อ:</span>
+        <label class="check"><input type="radio" name="imp-mode" value="append" data-imp="mode" ${imp.mode === 'append' ? 'checked' : ''}>ต่อท้ายข้อเดิม</label>
+        <label class="check"><input type="radio" name="imp-mode" value="replace" data-imp="mode" ${imp.mode === 'replace' ? 'checked' : ''}>แทนที่ข้อเดิมทั้งหมด</label>
+      </div>` : '') : `
+      <div class="card form-grid" style="padding:16px">
+        <label class="field"><span>ชื่อชุดสอบใหม่</span><input data-imp="title" maxlength="200" value="${esc(imp.title)}"></label>
+        <label class="field"><span>เวลาทำข้อสอบ (นาที)</span><input data-imp="duration" type="number" min="1" max="300" value="${imp.duration}"></label>
+      </div>`}
+    <div class="card table-wrap" style="padding:8px 8px 4px;max-height:460px;overflow:auto">
+      <table>
+        <tr><th>แถว</th><th>คำถาม</th><th>A</th><th>B</th><th>C</th><th>D</th><th>เฉลย</th><th>คะแนน</th><th>ผลตรวจ</th></tr>
+        ${imp.rows.map((r) => `
+          <tr class="${r.errors.length ? 'err' : ''}">
+            <td>${r.rowNo}</td><td>${cell(r.q.question_text)}</td>
+            <td>${cell(r.q.option_a)}</td><td>${cell(r.q.option_b)}</td><td>${cell(r.q.option_c)}</td><td>${cell(r.q.option_d)}</td>
+            <td><b>${esc(L[r.q.correct_answer.toUpperCase()] || r.q.correct_answer)}</b></td><td>${esc(r.q.points || '1')}</td>
+            ${r.errors.length ? `<td class="why">${esc(r.errors.join(' · '))}</td>` : '<td><span class="pill green">✓ ถูกต้อง</span></td>'}
+          </tr>`).join('')}
+      </table>
+    </div>
+    <div class="foot-actions">
+      <p>${icon('info', 'width:16px;height:16px')}${bad ? 'แถวที่ต้องแก้จะไม่ถูกนำเข้า แก้ในไฟล์แล้วอัปโหลดใหม่ได้' : 'ข้อมูลถูกต้องทุกแถว'}</p>
+      <div>
+        <button class="btn btn-secondary" data-act="import-cancel">เลือกไฟล์ใหม่</button>
+        <button class="btn btn-primary" data-act="import-go" ${good.length ? '' : 'disabled'}>นำเข้า ${good.length} ข้อ</button>
+      </div>
+    </div>`;
+}
+
+async function runImport(btn) {
+  const imp = state.imp;
+  const questions = imp.rows.filter((r) => !r.errors.length).map((r) => r.q);
+  btn.disabled = true;
+  btn.textContent = 'กำลังนำเข้า…';
+  try {
+    let examId = imp.target;
+    if (!examId) {
+      const created = await api('save_exam', { exam: { title: imp.title, duration_minutes: imp.duration, pass_percent: 50 } });
+      examId = created.id;
+      imp.target = examId; // ถ้าขั้นต่อไปพลาด กดใหม่จะไม่สร้างชุดซ้ำ
+      imp.exams.push({ ...created, question_count: 0 });
+    }
+    const saved = await api('save_questions', { exam_id: examId, questions, mode: imp.mode });
+    main().innerHTML = `
+      ${importHead(4)}
+      ${stateHtml({
+        img: 'love', title: `นำเข้า ${questions.length} ข้อเรียบร้อย!`,
+        text: `ชุดสอบ "${saved.title}" มีข้อสอบ ${saved.questions.length} ข้อแล้ว ตรวจความถูกต้องแล้วกดเผยแพร่ได้เลยครับ`,
+        button: `<div style="display:flex;gap:10px;margin-top:6px"><button class="btn btn-secondary btn-sm" data-go="import">นำเข้าไฟล์อื่น</button><button class="btn btn-primary btn-sm" data-go="edit" data-id="${saved.id}">เปิดชุดสอบ</button></div>`,
+      })}`;
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = `นำเข้า ${questions.length} ข้อ`;
+  }
+}
+
+// ช่องต่าง ๆ ในหน้านำเข้า
+app.addEventListener('change', (e) => {
+  const t = e.target;
+  if (state.view === 'import' && t.dataset.imp) {
+    if (t.dataset.imp === 'file' && t.files[0]) handleImportFile(t.files[0]);
+    else if (t.dataset.imp === 'target') state.imp.target = t.value;
+    else if (t.dataset.imp === 'mode') state.imp.mode = t.value;
+  }
+  if (t.dataset.act === 'switch-results') go('results', { id: t.value });
+});
+app.addEventListener('input', (e) => {
+  const t = e.target;
+  if (state.view === 'import' && (t.dataset.imp === 'title' || t.dataset.imp === 'duration')) state.imp[t.dataset.imp] = t.value;
+});
 
 // =========================================================
 // ปุ่มต่าง ๆ
@@ -334,6 +556,16 @@ app.addEventListener('click', async (e) => {
       if (ok) { state.dirty = false; await resetDemo(); location.reload(); }
       return;
     }
+    case 'template':
+      try { await (await import('./excel.js')).downloadTemplate(); } catch (err) { toast(err.message, 'error'); }
+      return;
+    case 'export':
+      try { await (await import('./excel.js')).exportResults(state.results); toast('ดาวน์โหลดไฟล์ Excel แล้ว'); } catch (err) { toast(err.message, 'error'); }
+      return;
+    case 'import-cancel':
+      return renderImportPick();
+    case 'import-go':
+      return runImport(el);
     case 'publish':
       try { await api('set_published', { exam_id: el.dataset.id, publish: true }); toast('เผยแพร่แล้ว นักเรียนเห็นชุดสอบนี้แล้ว'); viewExams(); }
       catch (err) { toast(err.message, 'error'); }

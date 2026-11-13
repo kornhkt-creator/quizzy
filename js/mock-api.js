@@ -41,6 +41,24 @@ function seed() {
     ['สิ่งมีชีวิตใดสร้างอาหารเองได้', 'เห็ด', 'ต้นมะม่วง', 'แมว', 'ปลา', 'B'],
     ['พืชใช้แก๊สใดในการสังเคราะห์ด้วยแสง', 'ออกซิเจน', 'ไนโตรเจน', 'คาร์บอนไดออกไซด์', null, 'C'],
   ]);
+
+  // นักเรียนจำลองที่ส่งข้อสอบชุดแรกแล้ว (ให้หน้าผลสอบมีข้อมูล)
+  const names = ['ด.ญ.กานดา มีสุข', 'ด.ช.ธนกร แก้วดี', 'ด.ญ.ปิยะดา ศรีทอง', 'ด.ช.ณัฐวุฒิ บุญมา', 'ด.ญ.พิมพ์ชนก รุ่งเรือง', 'ด.ช.กิตติ สายใจ', 'ด.ญ.อรอุมา ทองคำ'];
+  const picks = ['AACBA', 'AACAA', 'AAABA', 'BDCAB', null, 'AACBA', 'CACBB']; // null = ยังไม่เริ่ม
+  const qs = db.questions.filter((q) => q.exam_id === 'demo-exam-1');
+  names.forEach((name, i) => {
+    const pid = `p-demo-${i}`;
+    db.profiles.push({ id: pid, line_user_id: `demo-s${i}`, display_name: name, picture_url: null, full_name: name, student_code: String(65001 + i), role: 'student', created_at: nowIso() });
+    if (!picks[i]) return;
+    const answers = Object.fromEntries(qs.map((q, j) => [q.id, picks[i][j]]));
+    const right = qs.filter((q) => answers[q.id] === q.correct_answer);
+    const end = Date.now() - (i + 1) * 3600e3;
+    db.attempts.push({
+      id: uuid(), exam_id: 'demo-exam-1', profile_id: pid, started_at: new Date(end - 600e3).toISOString(), deadline_at: new Date(end + 300e3).toISOString(),
+      submitted_at: new Date(end).toISOString(), answers, score: right.reduce((s, q) => s + q.points, 0), max_score: qs.reduce((s, q) => s + q.points, 0),
+      correct_count: right.length, is_late: i === 3,
+    });
+  });
   return db;
 }
 
@@ -238,6 +256,51 @@ const H = {
     db.questions = db.questions.filter((q) => q.exam_id !== d.exam_id);
     db.attempts = db.attempts.filter((a) => a.exam_id !== d.exam_id);
     return { deleted: true };
+  },
+
+  exam_results(db, d) {
+    teacher(db);
+    const e = findExam(db, d.exam_id);
+    const qs = examQuestions(db, e.id);
+    const at = db.attempts.filter((a) => a.exam_id === e.id);
+    const done = at.filter((a) => a.submitted_at);
+    const pctOf = (a) => (a.max_score ? (a.score * 100) / a.max_score : 0);
+    const people = db.profiles.filter((p) => (p.role === 'student' && p.full_name != null) || at.some((a) => a.profile_id === p.id));
+    const rows = people.map((p) => {
+      const a = at.find((x) => x.profile_id === p.id);
+      const st = !a ? 'not_started' : a.submitted_at ? 'submitted' : Date.now() > Date.parse(a.deadline_at) + 60e3 ? 'expired' : 'in_progress';
+      return {
+        student_code: p.student_code, full_name: p.full_name, display_name: p.display_name, status: st,
+        score: a?.score ?? null, max_score: a?.max_score ?? null, correct_count: a?.correct_count ?? null,
+        percent: a?.submitted_at ? Math.round(pctOf(a)) : null, passed: a?.submitted_at ? pctOf(a) >= e.pass_percent : null,
+        started_at: a?.started_at ?? null, submitted_at: a?.submitted_at ?? null, is_late: !!a?.is_late,
+      };
+    }).sort((x, y) => (x.student_code ?? '￿').localeCompare(y.student_code ?? '￿') || String(x.full_name).localeCompare(String(y.full_name)));
+    const scores = done.map((a) => a.score);
+    const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+    return {
+      exam: { id: e.id, title: e.title, duration_minutes: e.duration_minutes, pass_percent: e.pass_percent, open_at: e.open_at, close_at: e.close_at, status: status(e), question_count: qs.length, max_score: qs.reduce((s, q) => s + q.points, 0) },
+      summary: {
+        student_count: rows.length, started_count: at.length, submitted_count: done.length,
+        avg_score: done.length ? Math.round(avg(scores) * 10) / 10 : null,
+        max_score_got: done.length ? Math.max(...scores) : null, min_score_got: done.length ? Math.min(...scores) : null,
+        avg_percent: done.length ? Math.round(avg(done.map(pctOf))) : null,
+        pass_count: done.filter((a) => pctOf(a) >= e.pass_percent).length, late_count: at.filter((a) => a.is_late).length,
+      },
+      rows,
+      questions: qs.map((q) => {
+        const n = done.length;
+        const count = (k) => done.filter((a) => a.answers[q.id] === k).length;
+        const correct = count(q.correct_answer);
+        const choices = { A: count('A'), B: count('B'), C: count('C'), D: count('D') };
+        choices.none = n - choices.A - choices.B - choices.C - choices.D;
+        return {
+          order_no: q.order_no, question_text: q.question_text, correct_answer: q.correct_answer, points: q.points,
+          option_a: q.option_a, option_b: q.option_b, option_c: q.option_c, option_d: q.option_d,
+          submitted: n, correct, wrong_percent: n ? Math.round(((n - correct) * 100) / n) : 0, choices,
+        };
+      }),
+    };
   },
 
   // ---------- นักเรียน: ทำข้อสอบ ----------
