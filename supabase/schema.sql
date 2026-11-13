@@ -362,6 +362,145 @@ begin
 end $$;
 
 -- =========================================================
+-- API: นักเรียนทำข้อสอบ (Phase 3)
+-- =========================================================
+
+-- ต้องลงทะเบียนแล้ว
+create or replace function public.qz_student(p_line_user_id text)
+returns public.profiles language plpgsql stable set search_path = public as $$
+declare r public.profiles;
+begin
+  r := qz_profile(p_line_user_id);
+  if r.full_name is null then raise exception 'กรุณาลงทะเบียนก่อนเข้าสอบ'; end if;
+  return r;
+end $$;
+
+-- สรุปผลสอบของ attempt หนึ่งครั้ง
+create or replace function public.qz_attempt_json(a public.attempts, e public.exams)
+returns jsonb language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'status', case when a.submitted_at is null then 'in_progress' else 'submitted' end,
+    'started_at', a.started_at, 'deadline_at', a.deadline_at, 'submitted_at', a.submitted_at,
+    'score', a.score, 'max_score', a.max_score, 'correct_count', a.correct_count,
+    'question_count', (select count(*) from questions q where q.exam_id = e.id),
+    'percent', case when a.submitted_at is null then null
+                    when coalesce(a.max_score, 0) = 0 then 0
+                    else round(a.score * 100.0 / a.max_score) end,
+    'passed', case when a.submitted_at is null then null
+                   else coalesce(a.score * 100.0 / nullif(a.max_score, 0), 0) >= e.pass_percent end,
+    'is_late', a.is_late,
+    'exam_title', e.title, 'exam_id', e.id, 'pass_percent', e.pass_percent)
+$$;
+
+-- รายการชุดสอบที่นักเรียนเห็น: เผยแพร่แล้วและยังไม่ปิด + ชุดที่เคยเริ่มสอบแล้ว
+create or replace function public.api_list_exams(p_line_user_id text)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare p profiles;
+begin
+  p := qz_student(p_line_user_id);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', e.id, 'title', e.title, 'description', e.description,
+      'duration_minutes', e.duration_minutes, 'pass_percent', e.pass_percent,
+      'open_at', e.open_at, 'close_at', e.close_at, 'status', qz_exam_status(e),
+      'question_count', (select count(*) from questions q where q.exam_id = e.id),
+      'max_score', (select coalesce(sum(q.points), 0) from questions q where q.exam_id = e.id),
+      'attempt', case when a.id is null then null else qz_attempt_json(a, e) end
+    ) order by e.created_at desc)
+    from exams e
+    left join attempts a on a.exam_id = e.id and a.profile_id = p.id
+    where a.id is not null
+       or (e.is_published and qz_exam_status(e) in ('open', 'scheduled')
+           and exists (select 1 from questions q where q.exam_id = e.id))
+  ), '[]'::jsonb);
+end $$;
+
+-- ข้อสอบสำหรับนักเรียน: ไม่มีเฉลยและคำอธิบายเฉลย
+create or replace function public.qz_exam_paper(a public.attempts, e public.exams)
+returns jsonb language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'status', 'in_progress',
+    'exam', jsonb_build_object('id', e.id, 'title', e.title, 'duration_minutes', e.duration_minutes, 'pass_percent', e.pass_percent),
+    'started_at', a.started_at, 'deadline_at', a.deadline_at, 'server_now', now(),
+    'questions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id, 'order_no', q.order_no, 'question_text', q.question_text, 'points', q.points,
+        'options', (select jsonb_agg(jsonb_build_object('key', o.k, 'text', o.t) order by o.k)
+                    from (values ('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)) o(k, t)
+                    where o.t is not null)
+      ) order by q.order_no)
+      from questions q where q.exam_id = e.id), '[]'::jsonb))
+$$;
+
+-- เริ่มสอบ (หรือกลับมาทำต่อ) เวลาเริ่มและเวลาสิ้นสุดใช้เวลาของ server
+create or replace function public.api_start_exam(p_line_user_id text, p_exam_id uuid)
+returns jsonb language plpgsql set search_path = public as $$
+declare p profiles; e exams; a attempts; v_status text;
+begin
+  p := qz_student(p_line_user_id);
+  select * into e from exams where id = p_exam_id;
+  if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+
+  select * into a from attempts where exam_id = e.id and profile_id = p.id;
+  if found then
+    if a.submitted_at is not null then
+      return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e));
+    end if;
+    return qz_exam_paper(a, e); -- กลับมาทำต่อ เวลายังเดินตามเดิม
+  end if;
+
+  v_status := qz_exam_status(e);
+  if v_status = 'draft' then raise exception 'ชุดสอบนี้ยังไม่เปิดให้สอบ'; end if;
+  if v_status = 'scheduled' then raise exception 'ยังไม่ถึงเวลาเปิดสอบ'; end if;
+  if v_status = 'closed' then raise exception 'ชุดสอบนี้ปิดรับคำตอบแล้ว'; end if;
+  if not exists (select 1 from questions where exam_id = e.id) then raise exception 'ชุดสอบนี้ยังไม่มีข้อสอบ'; end if;
+
+  insert into attempts (exam_id, profile_id, started_at, deadline_at)
+  values (e.id, p.id, now(), least(now() + make_interval(mins => e.duration_minutes), coalesce(e.close_at, 'infinity')))
+  on conflict (exam_id, profile_id) do nothing;   -- กดเริ่มซ้อนกัน 2 ครั้ง ได้ attempt เดียว
+  select * into a from attempts where exam_id = e.id and profile_id = p.id;
+  return qz_exam_paper(a, e);
+end $$;
+
+-- ส่งคำตอบและตรวจคะแนนที่ server
+-- ส่งซ้ำได้ผลเดิม (ไม่ตรวจใหม่) / ส่งช้ากว่าเวลาเกิน 60 วินาที ยังบันทึกแต่ทำเครื่องหมาย is_late
+create or replace function public.api_submit_exam(p_line_user_id text, p_exam_id uuid, p_answers jsonb)
+returns jsonb language plpgsql set search_path = public as $$
+declare
+  p profiles; e exams; a attempts;
+  v_answers jsonb := case when jsonb_typeof(p_answers) = 'object' then p_answers else '{}'::jsonb end;
+  v_clean jsonb; v_score int; v_max int; v_correct int;
+begin
+  p := qz_student(p_line_user_id);
+  select * into e from exams where id = p_exam_id;
+  if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+  select * into a from attempts where exam_id = e.id and profile_id = p.id for update;
+  if not found then raise exception 'ยังไม่ได้เริ่มสอบชุดนี้'; end if;
+  if a.submitted_at is not null then
+    return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e));
+  end if;
+
+  -- เก็บเฉพาะคำตอบของข้อในชุดนี้ และเป็นตัวเลือกที่มีอยู่จริง
+  select coalesce(jsonb_object_agg(q.id::text, ans), '{}'::jsonb) into v_clean
+  from questions q
+  cross join lateral (select upper(v_answers->>q.id::text) as ans) x
+  where q.exam_id = e.id
+    and (x.ans in ('A', 'B') or (x.ans = 'C' and q.option_c is not null) or (x.ans = 'D' and q.option_d is not null));
+
+  select coalesce(sum(q.points) filter (where v_clean->>q.id::text = q.correct_answer), 0),
+         coalesce(sum(q.points), 0),
+         count(*) filter (where v_clean->>q.id::text = q.correct_answer)
+    into v_score, v_max, v_correct
+  from questions q where q.exam_id = e.id;
+
+  update attempts set
+    submitted_at = now(), answers = v_clean, score = v_score, max_score = v_max,
+    correct_count = v_correct, is_late = now() > a.deadline_at + interval '60 seconds'
+  where id = a.id returning * into a;
+  return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e));
+end $$;
+
+-- =========================================================
 -- สิทธิ์: ฟังก์ชัน api_* และ qz_* เรียกได้เฉพาะ service_role (Edge Function)
 -- =========================================================
 do $$

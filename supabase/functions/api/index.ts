@@ -33,6 +33,11 @@ const ACTIONS: Record<string, { fn: string; args: (d: Json, u: LineUser) => Json
   },
   set_published: { fn: 'api_set_published', args: (d) => ({ p_exam_id: d.exam_id ?? null, p_publish: d.publish === true }) },
   delete_exam: { fn: 'api_delete_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null }) },
+
+  // ---------- นักเรียน: ทำข้อสอบ ----------
+  list_exams: { fn: 'api_list_exams', args: () => ({}) },
+  start_exam: { fn: 'api_start_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null }) },
+  submit_exam: { fn: 'api_submit_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null, p_answers: d.answers ?? {} }) },
 };
 
 const CORS = {

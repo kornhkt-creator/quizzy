@@ -4,11 +4,18 @@
 import { IS_DEMO } from './config.js';
 import { initLine } from './line.js';
 import { api } from './api.js';
-import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, fmtDateYear } from './ui.js';
+import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration } from './ui.js';
 import { icon, leaf } from './icons.js';
 
 const app = document.getElementById('app');
-const state = { me: null, tab: 'home' };
+const state = {
+  me: null,
+  tab: 'home',
+  exams: [],
+  // ระหว่างสอบ
+  paper: null, answers: {}, index: 0, offset: 0, timer: null, submitting: false,
+};
+const LETTER = { A: 'ก', B: 'ข', C: 'ค', D: 'ง' };
 
 // ---------- เริ่มต้น ----------
 async function start() {
@@ -32,12 +39,13 @@ function renderError(err) {
     button: '<button class="btn btn-secondary btn-sm" data-act="reload">ลองอีกครั้ง</button>',
   });
 }
+const top = () => (IS_DEMO ? demoBanner() : '');
 
 // ---------- ลงทะเบียนครั้งแรก ----------
 function renderRegister() {
   const me = state.me;
   app.innerHTML = `
-    ${IS_DEMO ? demoBanner() : ''}
+    ${top()}
     <div class="hero">
       ${leaf('left:-8px;top:70px;transform:rotate(-20deg)')}
       ${leaf('right:-10px;top:130px;transform:scaleX(-1) rotate(-10deg);width:46px;height:46px')}
@@ -84,13 +92,16 @@ function renderRegister() {
   });
 }
 
-// ---------- แท็บหลัก ----------
+// =========================================================
+// แท็บหลัก
+// =========================================================
 function tabbar() {
   const t = (id, ic, label) => `<button class="${state.tab === id ? 'on' : ''}" data-tab="${id}">${icon(ic)}${label}</button>`;
   return `<nav class="tabbar">${t('home', 'home', 'หน้าแรก')}${t('history', 'chart', 'ผลสอบของฉัน')}${t('profile', 'user', 'โปรไฟล์')}</nav>`;
 }
 
 function showTab(tab) {
+  stopTimer();
   state.tab = tab;
   window.scrollTo(0, 0);
   if (tab === 'home') renderHome();
@@ -98,34 +109,333 @@ function showTab(tab) {
   else renderProfile();
 }
 
-function renderHome() {
+async function loadExams() {
+  state.exams = await api('list_exams');
+  return state.exams;
+}
+
+// ---------- หน้าแรก ----------
+async function renderHome() {
   const me = state.me;
   app.innerHTML = `
-    ${IS_DEMO ? demoBanner() : ''}
+    ${top()}
     <div class="body with-tabbar">
       <div class="list-row" style="padding-top:10px">
         ${avatarHtml(me)}
         <div class="t"><small>สวัสดีครับ</small><b style="font-size:17px;font-weight:600">${esc(me.full_name)}</b></div>
       </div>
-      ${stateHtml({ img: 'sleep', title: 'ยังไม่มีข้อสอบตอนนี้', text: 'พักผ่อนก่อนนะครับ เมื่อครูเปิดสอบจะขึ้นที่หน้านี้' })}
+      <div id="home-list">${loadingHtml()}</div>
     </div>
     ${tabbar()}`;
+
+  const box = document.getElementById('home-list');
+  try {
+    const exams = await loadExams();
+    const waiting = exams.filter((e) => e.status === 'open' && e.attempt?.status !== 'submitted');
+    const firstClose = waiting.map((e) => e.close_at).filter(Boolean).sort()[0];
+    // เรียง: ทำค้างไว้ → เปิดอยู่ → ยังไม่ถึงเวลา → ส่งแล้ว
+    const rank = (e) => (e.attempt?.status === 'in_progress' ? 0 : e.attempt ? 3 : e.status === 'open' ? 1 : 2);
+    const sorted = [...exams].sort((a, b) => rank(a) - rank(b));
+
+    if (!exams.length) {
+      box.innerHTML = stateHtml({ img: 'sleep', title: 'ยังไม่มีข้อสอบตอนนี้', text: 'พักผ่อนก่อนนะครับ เมื่อครูเปิดสอบจะขึ้นที่หน้านี้' });
+      return;
+    }
+    box.innerHTML = `
+      ${waiting.length ? `
+        <div class="card banner">
+          <div class="big">มีข้อสอบรอคุณ<br>อยู่ ${waiting.length} ชุด</div>
+          <small>${firstClose ? `ปิดรับชุดแรก ${fmtDate(firstClose)}` : 'ทำได้เลยตอนนี้'}</small>
+          <img src="${mascot('wink')}" alt="">
+        </div>` : `
+        <div class="card banner">
+          <div class="big">ทำข้อสอบครบ<br>ทุกชุดแล้ว!</div>
+          <small>เก่งมากครับ รอชุดต่อไปนะ</small>
+          <img src="${mascot('love')}" alt="">
+        </div>`}
+      <div class="sec" style="margin-top:12px"><h2>ข้อสอบของฉัน</h2></div>
+      <div style="display:flex;flex-direction:column;gap:10px">${sorted.map(examRow).join('')}</div>`;
+  } catch (err) {
+    box.innerHTML = stateHtml({ img: 'surprised', title: 'โหลดข้อสอบไม่สำเร็จ', text: err.message, button: '<button class="btn btn-secondary btn-sm" data-tab="home">ลองอีกครั้ง</button>' });
+  }
 }
 
-function renderHistory() {
+function examRow(e) {
+  const a = e.attempt;
+  let tile = `<div class="tile">${icon('clip')}</div>`;
+  let sub = `${e.question_count} ข้อ · ${e.duration_minutes} นาที${e.close_at ? ` · ปิด ${fmtDate(e.close_at)}` : ''}`;
+  let btn = `<span class="btn btn-primary btn-sm">เริ่มสอบ</span>`;
+  if (a?.status === 'submitted') {
+    tile = `<div class="tile g">${icon('check')}</div>`;
+    sub = `ส่งแล้ว ${fmtDate(a.submitted_at)}`;
+    btn = `<span class="btn btn-green btn-sm">ได้ ${a.score}/${a.max_score}</span>`;
+  } else if (a?.status === 'in_progress') {
+    sub = 'กำลังทำอยู่ · เวลายังเดินอยู่';
+    btn = `<span class="btn btn-primary btn-sm">ทำต่อ</span>`;
+  } else if (e.status === 'scheduled') {
+    sub = `เปิดสอบ ${fmtDate(e.open_at)}`;
+    btn = `<span class="pill gray">ยังไม่เปิด</span>`;
+  }
+  return `
+    <button class="card list-row" data-exam="${e.id}">
+      ${tile}
+      <div class="t"><b>${esc(e.title)}</b><small>${esc(sub)}</small></div>
+      ${btn}
+    </button>`;
+}
+
+function openExam(id) {
+  const e = state.exams.find((x) => x.id === id);
+  if (!e) return;
+  if (e.attempt?.status === 'submitted') return renderResult(e.attempt);
+  if (!e.attempt && e.status === 'scheduled') return toast(`ยังไม่ถึงเวลาเปิดสอบ (เปิด ${fmtDate(e.open_at)})`);
+  renderIntro(e);
+}
+
+// ---------- คำชี้แจงก่อนสอบ ----------
+function renderIntro(e) {
+  const resume = e.attempt?.status === 'in_progress';
   app.innerHTML = `
-    ${IS_DEMO ? demoBanner() : ''}
-    <div class="appbar"><h1>ผลสอบของฉัน</h1></div>
-    <div class="body with-tabbar">
-      ${stateHtml({ img: 'sleep', title: 'ยังไม่มีผลสอบ', text: 'ทำข้อสอบชุดแรกแล้วผลจะขึ้นที่นี่ครับ' })}
-    </div>
-    ${tabbar()}`;
+    ${top()}
+    <div class="appbar"><button class="btn-icon" data-tab="home" aria-label="กลับ">${icon('back')}</button><h1>คำชี้แจง</h1><span style="width:38px"></span></div>
+    <div class="body" style="padding-top:0">
+      <div class="card" style="padding:18px">
+        <div style="font-size:20px;font-weight:600;line-height:1.35">${esc(e.title)}</div>
+        ${e.close_at ? `<div class="muted" style="font-size:13.5px;margin-top:2px">ปิดรับ ${fmtDate(e.close_at)}</div>` : ''}
+        ${e.description ? `<p style="font-size:14.5px;margin-top:8px;white-space:pre-wrap">${esc(e.description)}</p>` : ''}
+        <div class="mini-stats"><div><b>${e.question_count}</b>ข้อ</div><div><b>${e.duration_minutes}</b>นาที</div><div><b>${e.max_score}</b>คะแนนเต็ม</div></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;font-size:14.5px">
+        <div class="list-row"><div class="tile g sm">${icon('check')}</div>สอบได้ครั้งเดียว ส่งแล้วแก้ไม่ได้</div>
+        <div class="list-row"><div class="tile g sm">${icon('clock')}</div>เวลาเริ่มนับทันทีที่กดเริ่ม</div>
+        <div class="list-row"><div class="tile g sm">${icon('upload')}</div>หมดเวลา ระบบส่งคำตอบให้เอง</div>
+        <div class="list-row"><div class="tile g sm">${icon('info')}</div>หลุดออกจากแอป กลับมาทำต่อได้ (เวลายังเดิน)</div>
+      </div>
+      <button class="btn btn-primary" data-start="${e.id}" style="margin-top:auto">${resume ? 'ทำข้อสอบต่อ' : 'เริ่มทำข้อสอบ'}</button>
+    </div>`;
 }
 
+// =========================================================
+// ทำข้อสอบ
+// =========================================================
+const storeKey = (examId) => `quizzy:answers:${state.me.id}:${examId}`;
+const remaining = () => Date.parse(state.paper.deadline_at) - (Date.now() + state.offset);
+
+async function beginExam(examId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังเปิดข้อสอบ…'; }
+  try {
+    const res = await api('start_exam', { exam_id: examId });
+    if (res.status === 'submitted') return renderResult(res.result);
+    state.paper = res;
+    state.offset = Date.parse(res.server_now) - Date.now(); // ชดเชยนาฬิกาเครื่องที่ไม่ตรง
+    state.answers = JSON.parse(localStorage.getItem(storeKey(examId)) || '{}');
+    state.index = Math.max(0, res.questions.findIndex((q) => !state.answers[q.id]));
+    state.submitting = false;
+    if (remaining() <= 0) return submitExam({ auto: true }); // กลับมาหลังหมดเวลา: ส่งที่ตอบไว้ทันที
+    renderQuestion();
+    startTimer();
+  } catch (err) {
+    toast(err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'เริ่มทำข้อสอบ'; }
+  }
+}
+
+function renderQuestion() {
+  const { paper, index, answers } = state;
+  const q = paper.questions[index];
+  const n = paper.questions.length;
+  const last = index === n - 1;
+  app.innerHTML = `
+    ${top()}
+    <div class="body" style="padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:600">ข้อ ${index + 1} <span class="muted" style="font-weight:400">/ ${n}</span></div>
+        <span class="timer" id="timer">${icon('clock', 'width:17px;height:17px')}<span>--:--</span></span>
+      </div>
+      <div class="progress"><i style="width:${(Object.keys(answers).length / n) * 100}%"></i></div>
+      <div class="card" style="padding:18px">
+        <span class="q-num">ข้อ ${index + 1} · ${q.points} คะแนน</span>
+        <div class="q-text">${esc(q.question_text)}</div>
+      </div>
+      ${q.options.map((o) => `
+        <button class="opt ${answers[q.id] === o.key ? 'sel' : ''}" data-pick="${o.key}">
+          <span class="k">${LETTER[o.key]}</span><span>${esc(o.text)}</span>
+        </button>`).join('')}
+      <div class="saved" id="saved" ${answers[q.id] ? '' : 'hidden'}>${icon('check', 'width:14px;height:14px')}บันทึกคำตอบในเครื่องแล้ว</div>
+    </div>
+    <div class="exam-foot">
+      <button class="grid-btn" data-act="grid" aria-label="ดูทุกข้อ">${icon('grid')}</button>
+      <button class="btn btn-secondary" data-act="prev" ${index === 0 ? 'disabled' : ''}>ก่อนหน้า</button>
+      <button class="btn btn-primary" data-act="${last ? 'finish' : 'next'}">${last ? 'ส่งคำตอบ' : 'ถัดไป'}</button>
+    </div>`;
+  tick();
+}
+
+function pick(key) {
+  const q = state.paper.questions[state.index];
+  state.answers[q.id] = key;
+  localStorage.setItem(storeKey(state.paper.exam.id), JSON.stringify(state.answers));
+  app.querySelectorAll('.opt').forEach((b) => b.classList.toggle('sel', b.dataset.pick === key));
+  document.getElementById('saved').hidden = false;
+  app.querySelector('.progress i').style.width = `${(Object.keys(state.answers).length / state.paper.questions.length) * 100}%`;
+}
+
+function numsHtml(current = -1) {
+  return `<div class="nums">${state.paper.questions.map((q, i) => {
+    const cls = state.answers[q.id] ? 'done' : current < 0 ? 'miss' : '';
+    return `<button class="${cls} ${i === current ? 'cur' : ''}" data-jump="${i}">${i + 1}</button>`;
+  }).join('')}</div>`;
+}
+
+// แผงเลขข้อ: กดเพื่อกระโดดไปข้อนั้น
+function openGrid() {
+  const wrap = document.createElement('div');
+  wrap.className = 'overlay';
+  wrap.innerHTML = `<div class="sheet"><h3>เลือกข้อ</h3><p class="muted" style="font-size:13.5px">สีเขียว = ตอบแล้ว</p>${numsHtml(state.index)}
+    <button class="btn btn-secondary" data-v="close">ปิด</button></div>`;
+  wrap.addEventListener('click', (e) => {
+    const j = e.target.closest('[data-jump]');
+    if (j) { state.index = Number(j.dataset.jump); renderQuestion(); }
+    if (j || e.target === wrap || e.target.closest('[data-v]')) wrap.remove();
+  });
+  document.body.appendChild(wrap);
+}
+
+async function confirmSubmit() {
+  const qs = state.paper.questions;
+  const missing = qs.map((q, i) => (state.answers[q.id] ? null : i + 1)).filter(Boolean);
+  const ok = await confirmBox({
+    img: 'curious',
+    title: 'ส่งคำตอบเลยไหมครับ?',
+    text: missing.length
+      ? `ตอบแล้ว ${qs.length - missing.length} จาก ${qs.length} ข้อ · ยังไม่ได้ตอบข้อ ${missing.slice(0, 8).join(', ')}${missing.length > 8 ? '…' : ''}`
+      : `ตอบครบทั้ง ${qs.length} ข้อแล้ว ส่งแล้วแก้ไขไม่ได้นะครับ`,
+    extra: numsHtml(),
+    ok: 'ส่งคำตอบ',
+    cancel: 'กลับไปตรวจ',
+  });
+  if (ok) submitExam();
+}
+
+async function submitExam({ auto = false } = {}) {
+  if (state.submitting) return;
+  state.submitting = true;
+  stopTimer();
+  document.querySelector('.overlay')?.remove();
+  const examId = state.paper.exam.id;
+  app.innerHTML = loadingHtml(auto ? 'หมดเวลา กำลังส่งคำตอบ' : 'กำลังส่งคำตอบ');
+  try {
+    const res = await api('submit_exam', { exam_id: examId, answers: state.answers });
+    localStorage.removeItem(storeKey(examId));
+    state.paper = null;
+    renderResult(res.result, true);
+  } catch (err) {
+    // ส่งไม่สำเร็จ: คำตอบยังอยู่ในเครื่อง ให้กดส่งใหม่ได้
+    state.submitting = false;
+    app.innerHTML = `${top()}${stateHtml({
+      img: 'surprised', title: 'ส่งคำตอบไม่สำเร็จ',
+      text: `${err.message} · คำตอบยังเก็บไว้ในเครื่อง กดส่งอีกครั้งได้เลย`,
+      button: '<button class="btn btn-primary btn-sm" data-act="retry-submit">ส่งอีกครั้ง</button>',
+    })}`;
+  }
+}
+
+// ---------- ตัวจับเวลา (อิงเวลา server) ----------
+function startTimer() {
+  stopTimer();
+  state.timer = setInterval(tick, 1000);
+}
+function stopTimer() {
+  clearInterval(state.timer);
+  state.timer = null;
+}
+function tick() {
+  if (!state.paper) return;
+  const ms = remaining();
+  const el = document.getElementById('timer');
+  if (el) {
+    el.querySelector('span').textContent = fmtDuration(ms / 1000);
+    el.classList.toggle('warn', ms < 60e3);
+  }
+  if (ms <= 0 && state.timer) submitExam({ auto: true });
+}
+// กลับมาที่แอปหลังสลับไปแอปอื่น: อัปเดตเวลาทันที
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.timer) tick(); });
+window.addEventListener('beforeunload', (e) => { if (state.timer) e.preventDefault(); });
+
+// =========================================================
+// ผลคะแนน
+// =========================================================
+function renderResult(r, justSubmitted = false) {
+  stopTimer();
+  const pct = r.percent ?? 0;
+  const [img, says] = pct >= 80 ? ['happy', 'เก่งมากเลยครับ!'] : r.passed ? ['wink', 'ผ่านแล้ว เยี่ยมเลย!'] : ['curious', 'สู้ใหม่นะ!'];
+  const used = r.submitted_at && r.started_at ? (Date.parse(r.submitted_at) - Date.parse(r.started_at)) / 1000 : null;
+  app.innerHTML = `
+    ${top()}
+    <div class="sun">
+      <div class="bubble" style="left:20px;top:56px">${says}</div>
+      <img class="mascot" src="${mascot(img)}" alt="">
+    </div>
+    <div class="card score-card">
+      <div class="muted" style="font-size:14px">${esc(r.exam_title)}</div>
+      <div class="score">${r.score} <small>/ ${r.max_score}</small></div>
+      <span class="pill ${r.passed ? 'green' : 'orange'}" style="font-size:13.5px;padding:4px 12px;margin-top:6px">
+        ${r.passed ? `${icon('check', 'width:15px;height:15px')}ผ่านเกณฑ์` : 'ยังไม่ผ่านเกณฑ์'} · ${pct}%</span>
+      <div class="mini-stats">
+        <div><b>${used != null ? fmtDuration(Math.min(used, 359999)) : '-'}</b>ใช้เวลา</div>
+        <div><b>${r.correct_count}/${r.question_count}</b>ตอบถูก</div>
+        <div><b>${fmtDate(r.submitted_at, false)}</b>ส่งเมื่อ</div>
+      </div>
+      ${r.is_late ? '<p class="muted" style="font-size:12.5px;margin-top:10px">ส่งหลังหมดเวลา ครูจะเห็นว่าส่งช้า</p>' : ''}
+    </div>
+    <div class="body" style="justify-content:flex-end;padding-top:20px">
+      ${justSubmitted ? `<p class="center muted" style="font-size:13.5px">${icon('check', 'width:14px;height:14px;vertical-align:-2px;color:var(--green)')} ส่งคำตอบเรียบร้อยแล้ว</p>` : ''}
+      <button class="btn btn-primary" data-tab="home">กลับหน้าแรก</button>
+    </div>`;
+}
+
+// ---------- ผลสอบของฉัน ----------
+async function renderHistory() {
+  app.innerHTML = `
+    ${top()}
+    <div class="appbar"><h1>ผลสอบของฉัน</h1></div>
+    <div class="body with-tabbar" id="hist">${loadingHtml()}</div>
+    ${tabbar()}`;
+  const box = document.getElementById('hist');
+  try {
+    const done = (await loadExams()).filter((e) => e.attempt?.status === 'submitted')
+      .sort((a, b) => b.attempt.submitted_at.localeCompare(a.attempt.submitted_at));
+    if (!done.length) {
+      box.innerHTML = stateHtml({ img: 'sleep', title: 'ยังไม่มีผลสอบ', text: 'ทำข้อสอบชุดแรกแล้วผลจะขึ้นที่นี่ครับ' });
+      return;
+    }
+    const avg = Math.round(done.reduce((s, e) => s + e.attempt.percent, 0) / done.length);
+    const passed = done.filter((e) => e.attempt.passed).length;
+    box.innerHTML = `
+      <div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div class="muted" style="font-size:13px">คะแนนเฉลี่ย</div><div style="font-size:30px;font-weight:700;color:var(--brown);line-height:1.1">${avg}%</div></div>
+          <div class="muted" style="text-align:right;font-size:13px">สอบแล้ว <b style="color:var(--text)">${done.length}</b> ชุด<br>ผ่าน <b style="color:var(--green)">${passed}</b> ชุด</div>
+        </div>
+        <div class="progress" style="margin-top:10px"><i style="width:${avg}%"></i></div>
+      </div>
+      ${done.map((e) => `
+        <button class="card list-row" data-exam="${e.id}">
+          <div class="tile ${e.attempt.passed ? 'g' : ''}">${icon(e.attempt.passed ? 'star' : 'clip')}</div>
+          <div class="t"><b>${esc(e.title)}</b><small>${fmtDate(e.attempt.submitted_at, false)} · ${e.attempt.score}/${e.attempt.max_score}</small></div>
+          <span class="pill ${e.attempt.passed ? 'green' : 'orange'}">${e.attempt.percent}%${e.attempt.passed ? '' : ' · ไม่ผ่าน'}</span>
+        </button>`).join('')}`;
+  } catch (err) {
+    box.innerHTML = stateHtml({ img: 'surprised', title: 'โหลดผลสอบไม่สำเร็จ', text: err.message });
+  }
+}
+
+// ---------- โปรไฟล์ ----------
 function renderProfile() {
   const me = state.me;
   app.innerHTML = `
-    ${IS_DEMO ? demoBanner() : ''}
+    ${top()}
     <div class="appbar"><h1>โปรไฟล์</h1></div>
     <div class="body with-tabbar">
       <div class="card center" style="padding:22px 16px">
@@ -144,10 +454,20 @@ function renderProfile() {
 
 // ---------- ปุ่มต่าง ๆ (ใช้ event delegation) ----------
 app.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-tab],[data-act]');
-  if (!el) return;
+  const el = e.target.closest('[data-tab],[data-act],[data-exam],[data-start],[data-pick]');
+  if (!el || el.disabled) return;
   if (el.dataset.tab) return showTab(el.dataset.tab);
-  if (el.dataset.act === 'reload') location.reload();
+  if (el.dataset.exam) return openExam(el.dataset.exam);
+  if (el.dataset.start) return beginExam(el.dataset.start, el);
+  if (el.dataset.pick) return pick(el.dataset.pick);
+  switch (el.dataset.act) {
+    case 'reload': return location.reload();
+    case 'prev': state.index -= 1; return renderQuestion();
+    case 'next': state.index += 1; return renderQuestion();
+    case 'grid': return openGrid();
+    case 'finish': return confirmSubmit();
+    case 'retry-submit': return submitExam();
+  }
 });
 
 start();

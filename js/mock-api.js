@@ -103,6 +103,35 @@ function cleanQuestion(q, i) {
   return { question_text: text, option_a: a, option_b: b, option_c: c, option_d: d, correct_answer: ans, points: pts, explanation: opt(q.explanation) };
 }
 
+// ---------- ทำข้อสอบ (เหมือน qz_attempt_json / qz_exam_paper) ----------
+function student(db) {
+  const p = myProfile(db);
+  if (p.full_name == null) fail('กรุณาลงทะเบียนก่อนเข้าสอบ');
+  return p;
+}
+function attemptJson(db, a, e) {
+  const done = !!a.submitted_at;
+  const pct = !done ? null : a.max_score ? Math.round((a.score * 100) / a.max_score) : 0;
+  return {
+    status: done ? 'submitted' : 'in_progress', started_at: a.started_at, deadline_at: a.deadline_at, submitted_at: a.submitted_at,
+    score: a.score ?? null, max_score: a.max_score ?? null, correct_count: a.correct_count ?? null,
+    question_count: examQuestions(db, e.id).length, percent: pct,
+    passed: done ? (a.max_score ? (a.score * 100) / a.max_score : 0) >= e.pass_percent : null,
+    is_late: a.is_late, exam_title: e.title, exam_id: e.id, pass_percent: e.pass_percent,
+  };
+}
+function paper(db, a, e) {
+  return {
+    status: 'in_progress',
+    exam: { id: e.id, title: e.title, duration_minutes: e.duration_minutes, pass_percent: e.pass_percent },
+    started_at: a.started_at, deadline_at: a.deadline_at, server_now: nowIso(),
+    questions: examQuestions(db, e.id).map((q) => ({
+      id: q.id, order_no: q.order_no, question_text: q.question_text, points: q.points,
+      options: ['A', 'B', 'C', 'D'].map((k) => ({ key: k, text: q[`option_${k.toLowerCase()}`] })).filter((o) => o.text != null),
+    })),
+  };
+}
+
 // ---------- action (ชื่อเดียวกับ server) ----------
 const H = {
   me(db) {
@@ -209,6 +238,59 @@ const H = {
     db.questions = db.questions.filter((q) => q.exam_id !== d.exam_id);
     db.attempts = db.attempts.filter((a) => a.exam_id !== d.exam_id);
     return { deleted: true };
+  },
+
+  // ---------- นักเรียน: ทำข้อสอบ ----------
+  list_exams(db) {
+    const p = student(db);
+    return [...db.exams].sort((a, b) => b.created_at.localeCompare(a.created_at)).flatMap((e) => {
+      const a = db.attempts.find((x) => x.exam_id === e.id && x.profile_id === p.id);
+      const qs = examQuestions(db, e.id);
+      if (!a && !(e.is_published && ['open', 'scheduled'].includes(status(e)) && qs.length)) return [];
+      return [{
+        id: e.id, title: e.title, description: e.description, duration_minutes: e.duration_minutes, pass_percent: e.pass_percent,
+        open_at: e.open_at, close_at: e.close_at, status: status(e), question_count: qs.length,
+        max_score: qs.reduce((s, q) => s + q.points, 0), attempt: a ? attemptJson(db, a, e) : null,
+      }];
+    });
+  },
+
+  start_exam(db, d) {
+    const p = student(db);
+    const e = findExam(db, d.exam_id);
+    let a = db.attempts.find((x) => x.exam_id === e.id && x.profile_id === p.id);
+    if (a) return a.submitted_at ? { status: 'submitted', result: attemptJson(db, a, e) } : paper(db, a, e);
+    const s = status(e);
+    if (s === 'draft') fail('ชุดสอบนี้ยังไม่เปิดให้สอบ');
+    if (s === 'scheduled') fail('ยังไม่ถึงเวลาเปิดสอบ');
+    if (s === 'closed') fail('ชุดสอบนี้ปิดรับคำตอบแล้ว');
+    if (!examQuestions(db, e.id).length) fail('ชุดสอบนี้ยังไม่มีข้อสอบ');
+    const now = Date.now();
+    const end = Math.min(now + e.duration_minutes * 60e3, e.close_at ? Date.parse(e.close_at) : Infinity);
+    a = { id: uuid(), exam_id: e.id, profile_id: p.id, started_at: new Date(now).toISOString(), deadline_at: new Date(end).toISOString(), submitted_at: null, answers: {}, score: null, max_score: null, correct_count: null, is_late: false };
+    db.attempts.push(a);
+    return paper(db, a, e);
+  },
+
+  submit_exam(db, d) {
+    const p = student(db);
+    const e = findExam(db, d.exam_id);
+    const a = db.attempts.find((x) => x.exam_id === e.id && x.profile_id === p.id) || fail('ยังไม่ได้เริ่มสอบชุดนี้');
+    if (a.submitted_at) return { status: 'submitted', result: attemptJson(db, a, e) };
+    const given = d.answers && typeof d.answers === 'object' ? d.answers : {};
+    const qs = examQuestions(db, e.id);
+    const clean = {};
+    qs.forEach((q) => {
+      const ans = String(given[q.id] ?? '').toUpperCase();
+      if (['A', 'B'].includes(ans) || (ans === 'C' && q.option_c) || (ans === 'D' && q.option_d)) clean[q.id] = ans;
+    });
+    const right = qs.filter((q) => clean[q.id] === q.correct_answer);
+    Object.assign(a, {
+      submitted_at: nowIso(), answers: clean, score: right.reduce((s, q) => s + q.points, 0),
+      max_score: qs.reduce((s, q) => s + q.points, 0), correct_count: right.length,
+      is_late: Date.now() > Date.parse(a.deadline_at) + 60e3,
+    });
+    return { status: 'submitted', result: attemptJson(db, a, e) };
   },
 };
 
