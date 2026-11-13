@@ -22,6 +22,17 @@ const ACTIONS: Record<string, { fn: string; args: (d: Json, u: LineUser) => Json
   // ---------- ผู้ใช้ ----------
   me: { fn: 'api_me', args: (_d, u) => ({ p_display_name: u.name ?? null, p_picture_url: u.picture ?? null }) },
   register: { fn: 'api_register', args: (d) => ({ p_full_name: d.full_name ?? null, p_student_code: d.student_code ?? null }) },
+
+  // ---------- ครู: จัดการชุดสอบ ----------
+  teacher_list_exams: { fn: 'api_teacher_list_exams', args: () => ({}) },
+  get_exam: { fn: 'api_get_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null }) },
+  save_exam: { fn: 'api_save_exam', args: (d) => ({ p_exam: d.exam ?? {} }) },
+  save_questions: {
+    fn: 'api_save_questions',
+    args: (d) => ({ p_exam_id: d.exam_id ?? null, p_questions: d.questions ?? [], p_mode: d.mode === 'append' ? 'append' : 'replace' }),
+  },
+  set_published: { fn: 'api_set_published', args: (d) => ({ p_exam_id: d.exam_id ?? null, p_publish: d.publish === true }) },
+  delete_exam: { fn: 'api_delete_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null }) },
 };
 
 const CORS = {
@@ -66,6 +77,8 @@ export async function callRpc(fn: string, params: Json): Promise<unknown> {
 
   // ข้อความที่ฐานข้อมูลตั้งใจแจ้งผู้ใช้ (raise exception) มีรหัส P0001
   if (body?.code === 'P0001' && body.message) throw new ApiError(400, body.message);
+  // รหัสหรือรูปแบบข้อมูลผิด เช่น exam_id ไม่ใช่ uuid
+  if (body?.code === '22P02' || body?.code === 'PGRST202') throw new ApiError(400, 'ข้อมูลไม่ถูกต้อง');
   console.error('rpc error', fn, res.status, body);
   throw new ApiError(500, 'เกิดข้อผิดพลาดในระบบ ลองใหม่อีกครั้งนะครับ');
 }

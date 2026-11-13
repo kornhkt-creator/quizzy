@@ -163,6 +163,205 @@ begin
 end $$;
 
 -- =========================================================
+-- API: ครูจัดการชุดสอบ (Phase 2)
+-- =========================================================
+
+-- แปลงข้อความเป็นตัวเลข/เวลา ถ้าแปลงไม่ได้คืน null
+create or replace function public.qz_int(v text) returns int language plpgsql immutable as $$
+begin return v::int; exception when others then return null; end $$;
+create or replace function public.qz_ts(v text) returns timestamptz language plpgsql stable as $$
+begin return nullif(v, '')::timestamptz; exception when others then return null; end $$;
+create or replace function public.qz_uuid(v text) returns uuid language plpgsql immutable as $$
+begin return nullif(v, '')::uuid; exception when others then return null; end $$;
+
+-- มีนักเรียนเริ่มสอบแล้วหรือยัง (ถ้าเริ่มแล้ว ห้ามแก้ข้อสอบ)
+create or replace function public.qz_exam_locked(p_exam_id uuid)
+returns boolean language sql stable set search_path = public as $$
+  select exists (select 1 from attempts where exam_id = p_exam_id)
+$$;
+
+-- สถานะชุดสอบ: draft = ยังไม่เผยแพร่, scheduled = ยังไม่ถึงเวลาเปิด, open = เปิดอยู่, closed = ปิดแล้ว
+create or replace function public.qz_exam_status(e public.exams)
+returns text language sql stable as $$
+  select case
+    when not e.is_published then 'draft'
+    when e.open_at is not null and now() < e.open_at then 'scheduled'
+    when e.close_at is not null and now() >= e.close_at then 'closed'
+    else 'open' end
+$$;
+
+-- ชุดสอบพร้อมข้อสอบและเฉลย (สำหรับครูเท่านั้น)
+create or replace function public.qz_exam_full_json(p_exam_id uuid)
+returns jsonb language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'id', e.id, 'title', e.title, 'description', e.description,
+    'duration_minutes', e.duration_minutes, 'pass_percent', e.pass_percent,
+    'open_at', e.open_at, 'close_at', e.close_at, 'is_published', e.is_published,
+    'status', qz_exam_status(e), 'locked', qz_exam_locked(e.id),
+    'created_at', e.created_at, 'updated_at', e.updated_at,
+    'questions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q.id, 'order_no', q.order_no, 'question_text', q.question_text,
+        'option_a', q.option_a, 'option_b', q.option_b, 'option_c', q.option_c, 'option_d', q.option_d,
+        'correct_answer', q.correct_answer, 'points', q.points, 'explanation', q.explanation
+      ) order by q.order_no)
+      from questions q where q.exam_id = e.id), '[]'::jsonb))
+  from exams e where e.id = p_exam_id
+$$;
+
+create or replace function public.api_teacher_list_exams(p_line_user_id text)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare v_students int;
+begin
+  perform qz_teacher(p_line_user_id);
+  select count(*) into v_students from profiles where role = 'student' and full_name is not null;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', e.id, 'title', e.title, 'description', e.description,
+      'duration_minutes', e.duration_minutes, 'pass_percent', e.pass_percent,
+      'open_at', e.open_at, 'close_at', e.close_at, 'is_published', e.is_published,
+      'status', qz_exam_status(e), 'created_at', e.created_at,
+      'question_count', (select count(*) from questions q where q.exam_id = e.id),
+      'max_score', (select coalesce(sum(q.points), 0) from questions q where q.exam_id = e.id),
+      'started_count', (select count(*) from attempts a where a.exam_id = e.id),
+      'submitted_count', (select count(*) from attempts a where a.exam_id = e.id and a.submitted_at is not null),
+      'student_count', v_students
+    ) order by e.created_at desc)
+    from exams e), '[]'::jsonb);
+end $$;
+
+create or replace function public.api_get_exam(p_line_user_id text, p_exam_id uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare r jsonb;
+begin
+  perform qz_teacher(p_line_user_id);
+  r := qz_exam_full_json(p_exam_id);
+  if r is null then raise exception 'ไม่พบชุดสอบนี้'; end if;
+  return r;
+end $$;
+
+-- สร้าง (ไม่มี id) หรือแก้ไข (มี id) ข้อมูลชุดสอบ
+create or replace function public.api_save_exam(p_line_user_id text, p_exam jsonb)
+returns jsonb language plpgsql set search_path = public as $$
+declare
+  t profiles;
+  e exams;
+  v_id    uuid := qz_uuid(p_exam->>'id');
+  v_title text := trim(coalesce(p_exam->>'title', ''));
+  v_desc  text := trim(coalesce(p_exam->>'description', ''));
+  v_dur   int  := qz_int(p_exam->>'duration_minutes');
+  v_pass  int  := coalesce(qz_int(nullif(p_exam->>'pass_percent', '')), 50);
+  v_open  timestamptz := qz_ts(p_exam->>'open_at');
+  v_close timestamptz := qz_ts(p_exam->>'close_at');
+begin
+  t := qz_teacher(p_line_user_id);
+  if v_title = '' then raise exception 'กรุณาตั้งชื่อชุดสอบ'; end if;
+  if length(v_title) > 200 then raise exception 'ชื่อชุดสอบยาวเกิน 200 ตัวอักษร'; end if;
+  if length(v_desc) > 2000 then raise exception 'คำอธิบายยาวเกิน 2000 ตัวอักษร'; end if;
+  if v_dur is null or v_dur not between 1 and 300 then raise exception 'เวลาทำข้อสอบต้องอยู่ระหว่าง 1–300 นาที'; end if;
+  if v_pass not between 0 and 100 then raise exception 'เกณฑ์ผ่านต้องอยู่ระหว่าง 0–100%%'; end if;
+  if coalesce(p_exam->>'open_at', '') <> '' and v_open is null then raise exception 'รูปแบบเวลาเปิดสอบไม่ถูกต้อง'; end if;
+  if coalesce(p_exam->>'close_at', '') <> '' and v_close is null then raise exception 'รูปแบบเวลาปิดสอบไม่ถูกต้อง'; end if;
+  if v_open is not null and v_close is not null and v_close <= v_open then raise exception 'เวลาปิดสอบต้องอยู่หลังเวลาเปิดสอบ'; end if;
+
+  if v_id is null then
+    insert into exams (title, description, duration_minutes, pass_percent, open_at, close_at, created_by)
+    values (v_title, v_desc, v_dur, v_pass, v_open, v_close, t.id)
+    returning * into e;
+  else
+    select * into e from exams where id = v_id for update;
+    if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+    if qz_exam_locked(v_id) and v_dur <> e.duration_minutes then
+      raise exception 'มีนักเรียนเริ่มสอบแล้ว เปลี่ยนเวลาทำข้อสอบไม่ได้';
+    end if;
+    update exams set title = v_title, description = v_desc, duration_minutes = v_dur,
+      pass_percent = v_pass, open_at = v_open, close_at = v_close
+    where id = v_id returning * into e;
+  end if;
+  return qz_exam_full_json(e.id);
+end $$;
+
+-- บันทึกข้อสอบ: mode 'replace' = แทนที่ทั้งชุด, 'append' = ต่อท้าย (ใช้ตอนนำเข้า Excel)
+-- ถ้าข้อใดผิด จะไม่บันทึกเลยสักข้อ (ทั้งคำสั่งยกเลิกทั้งหมด)
+create or replace function public.api_save_questions(p_line_user_id text, p_exam_id uuid, p_questions jsonb, p_mode text default 'replace')
+returns jsonb language plpgsql set search_path = public as $$
+declare
+  e exams;
+  q jsonb;
+  i int := 0;
+  v_start int := 0;
+  v_count int;
+  v_text text; a text; b text; c text; d text; v_ans text; v_pts int; v_exp text;
+begin
+  perform qz_teacher(p_line_user_id);
+  select * into e from exams where id = p_exam_id for update;
+  if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+  if qz_exam_locked(p_exam_id) then raise exception 'มีนักเรียนเริ่มสอบชุดนี้แล้ว แก้ไขหรือเพิ่มข้อสอบไม่ได้'; end if;
+  if jsonb_typeof(p_questions) is distinct from 'array' then raise exception 'ข้อมูลข้อสอบไม่ถูกต้อง'; end if;
+  if p_mode not in ('replace', 'append') then raise exception 'ข้อมูลไม่ถูกต้อง'; end if;
+
+  if p_mode = 'replace' then
+    delete from questions where exam_id = p_exam_id;
+  else
+    select coalesce(max(order_no), 0) into v_start from questions where exam_id = p_exam_id;
+  end if;
+
+  for q in select * from jsonb_array_elements(p_questions) loop
+    i := i + 1;
+    v_text := trim(coalesce(q->>'question_text', ''));
+    a := nullif(trim(coalesce(q->>'option_a', '')), '');
+    b := nullif(trim(coalesce(q->>'option_b', '')), '');
+    c := nullif(trim(coalesce(q->>'option_c', '')), '');
+    d := nullif(trim(coalesce(q->>'option_d', '')), '');
+    v_ans := translate(upper(trim(coalesce(q->>'correct_answer', ''))), 'กขคง', 'ABCD');
+    v_exp := nullif(trim(coalesce(q->>'explanation', '')), '');
+    v_pts := case when coalesce(q->>'points', '') = '' then 1 else qz_int(q->>'points') end;
+
+    if v_text = '' then raise exception 'ข้อ %: กรุณากรอกคำถาม', i; end if;
+    if length(v_text) > 2000 then raise exception 'ข้อ %: คำถามยาวเกิน 2000 ตัวอักษร', i; end if;
+    if a is null or b is null then raise exception 'ข้อ %: ต้องมีตัวเลือก A และ B เป็นอย่างน้อย', i; end if;
+    if d is not null and c is null then raise exception 'ข้อ %: มีตัวเลือก D แต่ไม่มีตัวเลือก C', i; end if;
+    if greatest(length(a), length(b), length(coalesce(c, '')), length(coalesce(d, ''))) > 500 then
+      raise exception 'ข้อ %: ตัวเลือกยาวเกิน 500 ตัวอักษร', i;
+    end if;
+    if v_ans not in ('A', 'B', 'C', 'D') then raise exception 'ข้อ %: เฉลยต้องเป็น A, B, C หรือ D', i; end if;
+    if (v_ans = 'C' and c is null) or (v_ans = 'D' and d is null) then raise exception 'ข้อ %: เฉลยชี้ไปที่ตัวเลือกที่ว่าง', i; end if;
+    if v_pts is null or v_pts not between 1 and 100 then raise exception 'ข้อ %: คะแนนต้องเป็นตัวเลข 1–100', i; end if;
+
+    insert into questions (exam_id, order_no, question_text, option_a, option_b, option_c, option_d, correct_answer, points, explanation)
+    values (p_exam_id, v_start + i, v_text, a, b, c, d, v_ans, v_pts, v_exp);
+  end loop;
+
+  select count(*) into v_count from questions where exam_id = p_exam_id;
+  if v_count > 200 then raise exception 'ชุดสอบหนึ่งชุดมีได้ไม่เกิน 200 ข้อ'; end if;
+  if v_count = 0 and e.is_published then raise exception 'ชุดสอบที่เผยแพร่แล้วต้องมีอย่างน้อย 1 ข้อ'; end if;
+  update exams set updated_at = now() where id = p_exam_id;
+  return qz_exam_full_json(p_exam_id);
+end $$;
+
+create or replace function public.api_set_published(p_line_user_id text, p_exam_id uuid, p_publish boolean)
+returns jsonb language plpgsql set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  if not exists (select 1 from exams where id = p_exam_id) then raise exception 'ไม่พบชุดสอบนี้'; end if;
+  if p_publish and not exists (select 1 from questions where exam_id = p_exam_id) then
+    raise exception 'เพิ่มข้อสอบอย่างน้อย 1 ข้อก่อนเผยแพร่';
+  end if;
+  update exams set is_published = coalesce(p_publish, false) where id = p_exam_id;
+  return qz_exam_full_json(p_exam_id);
+end $$;
+
+-- ลบชุดสอบ (ข้อสอบและผลสอบของชุดนี้จะถูกลบด้วย)
+create or replace function public.api_delete_exam(p_line_user_id text, p_exam_id uuid)
+returns jsonb language plpgsql set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  delete from exams where id = p_exam_id;
+  if not found then raise exception 'ไม่พบชุดสอบนี้'; end if;
+  return jsonb_build_object('deleted', true);
+end $$;
+
+-- =========================================================
 -- สิทธิ์: ฟังก์ชัน api_* และ qz_* เรียกได้เฉพาะ service_role (Edge Function)
 -- =========================================================
 do $$

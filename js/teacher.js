@@ -4,11 +4,11 @@
 import { IS_DEMO } from './config.js';
 import { initLine } from './line.js';
 import { api, resetDemo } from './api.js';
-import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox } from './ui.js';
+import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate } from './ui.js';
 import { icon } from './icons.js';
 
 const app = document.getElementById('app');
-const state = { me: null, view: 'exams' };
+const state = { me: null, view: 'exams', exam: null, dirty: false };
 
 async function start() {
   app.innerHTML = `<div class="page">${loadingHtml('กำลังเข้าสู่ระบบ')}</div>`;
@@ -75,10 +75,12 @@ const NAV = [
   ['results', 'chart', 'ผลสอบ'],
   ['import', 'upload', 'นำเข้า Excel'],
 ];
+const MENU_OF = { edit: 'exams' };
 
 function shell(content) {
+  const current = MENU_OF[state.view] || state.view;
   const nav = NAV.map(([id, ic, label]) =>
-    `<button class="nav ${state.view === id ? 'on' : ''}" data-go="${id}">${icon(ic)}${label}</button>`).join('');
+    `<button class="nav ${current === id ? 'on' : ''}" data-go="${id}">${icon(ic)}${label}</button>`).join('');
   app.innerHTML = `
     ${IS_DEMO ? demoBanner() : ''}
     <div class="t-app">
@@ -91,38 +93,296 @@ function shell(content) {
       <main class="main" id="main">${content}</main>
     </div>`;
 }
+const main = () => document.getElementById('main');
 
-function go(view, params = {}) {
+async function go(view, params = {}) {
+  if (state.dirty) {
+    const leave = await confirmBox({ title: 'ยังไม่ได้บันทึก', text: 'ออกจากหน้านี้แล้วสิ่งที่แก้ไว้จะหายไป', ok: 'ออกโดยไม่บันทึก', cancel: 'อยู่ต่อ', center: true });
+    if (!leave) return;
+    state.dirty = false;
+  }
   state.view = view;
   window.scrollTo(0, 0);
-  const views = { exams: viewExams, results: viewResults, import: viewImport };
+  const views = { exams: viewExams, edit: viewEditor, results: viewResults, import: viewImport };
   (views[view] || viewExams)(params);
 }
+window.addEventListener('beforeunload', (e) => { if (state.dirty) e.preventDefault(); });
 
-function viewExams() {
+const errorState = (err) => stateHtml({ img: 'surprised', title: 'โหลดข้อมูลไม่สำเร็จ', text: err.message });
+
+// =========================================================
+// รายการชุดสอบ
+// =========================================================
+const STATUS = {
+  draft: ['orange', 'ฉบับร่าง'],
+  scheduled: ['gray', 'ยังไม่ถึงเวลาเปิด'],
+  open: ['green', '● เปิดสอบอยู่'],
+  closed: ['gray', 'ปิดแล้ว'],
+};
+const statusPill = (s) => `<span class="pill ${STATUS[s][0]}">${STATUS[s][1]}</span>`;
+
+async function viewExams() {
   shell(`
-    <div class="main-head"><div><h1>ชุดสอบของฉัน</h1><p>สร้างและจัดการชุดข้อสอบ</p></div></div>
-    ${stateHtml({ img: 'sleep', title: 'ยังไม่มีชุดสอบ', text: 'ระบบสร้างชุดสอบจะเปิดใน Phase 2' })}`);
+    <div class="main-head">
+      <div><h1>ชุดสอบของฉัน</h1><p id="sub">กำลังโหลด…</p></div>
+      <div class="head-actions">
+        <button class="btn btn-secondary" data-go="import">${icon('upload')}นำเข้าจาก Excel</button>
+        <button class="btn btn-primary" data-go="edit">${icon('plus')}สร้างชุดสอบ</button>
+      </div>
+    </div>
+    <div id="list">${loadingHtml()}</div>`);
+  const list = document.getElementById('list');
+  try {
+    const exams = await api('teacher_list_exams');
+    document.getElementById('sub').textContent = `${exams.length} ชุด · เปิดสอบอยู่ ${exams.filter((e) => e.status === 'open').length} ชุด`;
+    list.innerHTML = `<div class="exam-grid">${exams.map(examCard).join('')}
+      <button class="card exam-card empty-new" data-go="edit"><div>${icon('plus', 'width:30px;height:30px')}<div>สร้างชุดสอบใหม่</div></div></button></div>`;
+  } catch (err) { list.innerHTML = errorState(err); }
 }
 
+function examCard(e) {
+  const published = e.status !== 'draft';
+  const when = e.status === 'scheduled' ? `เปิด ${fmtDate(e.open_at)}` : e.close_at ? `ปิด ${fmtDate(e.close_at)}` : 'ไม่กำหนดเวลาปิด';
+  const pct = e.student_count ? Math.round((e.submitted_count / e.student_count) * 100) : 0;
+  return `
+    <div class="card exam-card">
+      <div style="display:flex;justify-content:space-between;gap:8px">${statusPill(e.status)}
+        ${published ? `<span class="pill gray">ส่งแล้ว ${e.submitted_count}/${e.student_count}</span>` : ''}</div>
+      <h3>${esc(e.title)}</h3>
+      <div class="meta">
+        <span>${icon('list')}${e.question_count} ข้อ · ${e.max_score} คะแนน</span>
+        <span>${icon('clock')}${e.duration_minutes} นาที</span>
+        <span>${esc(when)}</span>
+      </div>
+      ${published ? `<div class="progress"><i style="width:${pct}%"></i></div>` : '<div class="muted" style="font-size:13px">ยังไม่เผยแพร่ นักเรียนยังไม่เห็น</div>'}
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" data-go="edit" data-id="${e.id}">${icon(e.started_count ? 'eye' : 'edit')}${e.started_count ? 'ดูข้อสอบ' : 'แก้ไข'}</button>
+        ${e.started_count ? `<button class="btn btn-secondary btn-sm" data-go="results" data-id="${e.id}">${icon('chart')}ดูผล</button>` : ''}
+        ${!published ? `<button class="btn btn-primary btn-sm" data-act="publish" data-id="${e.id}">เผยแพร่</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// =========================================================
+// สร้าง / แก้ไขชุดสอบ
+// =========================================================
+const blankQuestion = () => ({ question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'A', points: 1, explanation: '' });
+
+// แปลงเวลา ISO ↔ ช่อง datetime-local (ตามเวลาเครื่อง)
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
+
+async function viewEditor({ id } = {}) {
+  state.dirty = false;
+  if (!id) {
+    state.exam = { id: null, title: '', description: '', duration_minutes: 15, pass_percent: 50, open_at: null, close_at: null, is_published: false, status: 'draft', locked: false, questions: [blankQuestion()] };
+    return renderEditor();
+  }
+  shell(loadingHtml());
+  try {
+    state.exam = await api('get_exam', { exam_id: id });
+    renderEditor();
+  } catch (err) { main().innerHTML = errorState(err); }
+}
+
+function renderEditor() {
+  const e = state.exam;
+  const lock = e.locked;
+  const total = e.questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
+  shell(`
+    <div class="main-head">
+      <div>
+        <button class="btn-icon" data-go="exams" style="width:auto;border-radius:99px;padding:0 10px 0 4px;color:var(--muted);font-size:14px;display:inline-flex;gap:2px">${icon('back')}ชุดสอบทั้งหมด</button>
+        <h1>${e.id ? esc(e.title) : 'สร้างชุดสอบใหม่'}</h1>
+        <p>${statusPill(e.status)}</p>
+      </div>
+      <div class="head-actions">
+        ${e.id ? `<button class="btn btn-secondary" data-act="toggle-publish">${e.is_published ? 'ซ่อนจากนักเรียน' : 'เผยแพร่'}</button>` : ''}
+        <button class="btn btn-primary" data-act="save">${icon('check')}บันทึก</button>
+      </div>
+    </div>
+
+    ${lock ? `<div class="lock-note">${icon('info')}มีนักเรียนเริ่มสอบชุดนี้แล้ว จึงแก้ไขข้อสอบและเวลาทำข้อสอบไม่ได้ (แก้ชื่อ คำอธิบาย และเวลาเปิด-ปิดได้)</div>` : ''}
+
+    <div class="card form-grid" style="padding:18px">
+      <label class="field full"><span>ชื่อชุดสอบ *</span><input data-f="title" maxlength="200" value="${esc(e.title)}" placeholder="เช่น บทที่ 3 เศษส่วน"></label>
+      <label class="field full"><span>คำอธิบาย / คำชี้แจง</span><textarea data-f="description" maxlength="2000" placeholder="เช่น ข้อสอบปรนัย 10 ข้อ อ่านโจทย์ให้ดีก่อนตอบ">${esc(e.description)}</textarea></label>
+      <label class="field"><span>เวลาทำข้อสอบ (นาที) *</span><input data-f="duration_minutes" type="number" min="1" max="300" value="${e.duration_minutes}" ${lock ? 'disabled' : ''}></label>
+      <label class="field"><span>เกณฑ์ผ่าน (%)</span><input data-f="pass_percent" type="number" min="0" max="100" value="${e.pass_percent}"></label>
+      <label class="field"><span>เปิดสอบ (เว้นว่าง = เปิดทันทีที่เผยแพร่)</span><input data-f="open_at" type="datetime-local" value="${toLocalInput(e.open_at)}"></label>
+      <label class="field"><span>ปิดสอบ (เว้นว่าง = ไม่ปิด)</span><input data-f="close_at" type="datetime-local" value="${toLocalInput(e.close_at)}"></label>
+    </div>
+
+    <div class="sec"><h2>ข้อสอบ <span class="muted" style="font-weight:400" id="q-sum">${e.questions.length} ข้อ · ${total} คะแนน</span></h2>
+      ${lock ? '' : `<button class="btn btn-secondary btn-sm" data-go="import" data-id="${e.id || ''}">${icon('upload')}นำเข้าจาก Excel</button>`}</div>
+    <div id="qs" style="display:flex;flex-direction:column;gap:14px">${e.questions.map(questionCard).join('')}</div>
+    ${lock ? '' : `<button class="btn btn-secondary" data-act="add-q">${icon('plus')}เพิ่มข้อสอบ</button>`}
+
+    <div class="foot-actions">
+      <div>${e.id ? `<button class="btn btn-danger" data-act="delete-exam">${icon('trash')}ลบชุดสอบ</button>` : ''}</div>
+      <div><button class="btn btn-primary" data-act="save">${icon('check')}บันทึก</button></div>
+    </div>`);
+}
+
+function questionCard(q, i) {
+  const lock = state.exam.locked;
+  const dis = lock ? 'disabled' : '';
+  const n = state.exam.questions.length;
+  const opt = (key, label) => `
+    <label class="q-opt">
+      <input type="radio" name="ans-${i}" data-q="${i}" data-qf="correct_answer" value="${key}" ${q.correct_answer === key ? 'checked' : ''} ${dis} title="เลือกเป็นเฉลย">
+      <input class="input" data-q="${i}" data-qf="option_${key.toLowerCase()}" value="${esc(q[`option_${key.toLowerCase()}`] || '')}" placeholder="${label}${key > 'B' ? ' (ไม่บังคับ)' : ''}" maxlength="500" ${dis}>
+    </label>`;
+  return `
+    <div class="card q-edit" data-qcard="${i}">
+      <div class="q-head">
+        <span class="q-num">ข้อ ${i + 1}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <label class="muted" style="font-size:13px;display:flex;align-items:center;gap:6px">คะแนน
+            <input class="input" style="width:70px;min-height:34px;padding:4px 10px" type="number" min="1" max="100" data-q="${i}" data-qf="points" value="${esc(q.points)}" ${dis}></label>
+          ${lock ? '' : `
+            <button class="btn-icon" data-act="q-up" data-i="${i}" ${i === 0 ? 'disabled' : ''} title="เลื่อนขึ้น">${icon('up')}</button>
+            <button class="btn-icon" data-act="q-down" data-i="${i}" ${i === n - 1 ? 'disabled' : ''} title="เลื่อนลง">${icon('down')}</button>
+            <button class="btn-icon" data-act="q-del" data-i="${i}" title="ลบข้อนี้" style="color:var(--red)">${icon('trash')}</button>`}
+        </div>
+      </div>
+      <label class="field"><textarea data-q="${i}" data-qf="question_text" maxlength="2000" placeholder="พิมพ์คำถาม" ${dis}>${esc(q.question_text)}</textarea></label>
+      <div class="muted" style="font-size:13px">ตัวเลือก (กดวงกลมหน้าตัวเลือกที่ถูกต้อง)</div>
+      <div class="q-opts">${opt('A', 'ตัวเลือก ก')}${opt('B', 'ตัวเลือก ข')}${opt('C', 'ตัวเลือก ค')}${opt('D', 'ตัวเลือก ง')}</div>
+      <label class="field"><span>คำอธิบายเฉลย (ครูเห็นคนเดียว ไม่บังคับ)</span><input data-q="${i}" data-qf="explanation" value="${esc(q.explanation || '')}" maxlength="1000" ${dis}></label>
+    </div>`;
+}
+
+function refreshQuestions() {
+  document.getElementById('qs').innerHTML = state.exam.questions.map(questionCard).join('');
+  updateSum();
+}
+function updateSum() {
+  const qs = state.exam.questions;
+  const el = document.getElementById('q-sum');
+  if (el) el.textContent = `${qs.length} ข้อ · ${qs.reduce((s, q) => s + (Number(q.points) || 0), 0)} คะแนน`;
+}
+
+// เก็บค่าที่พิมพ์ลง state ทันที
+app.addEventListener('input', (e) => {
+  if (state.view !== 'edit') return;
+  const t = e.target;
+  if (t.dataset.f) {
+    const v = t.dataset.f.endsWith('_at') ? fromLocalInput(t.value) : t.value;
+    state.exam[t.dataset.f] = v;
+    state.dirty = true;
+  } else if (t.dataset.qf) {
+    state.exam.questions[Number(t.dataset.q)][t.dataset.qf] = t.value;
+    state.dirty = true;
+    if (t.dataset.qf === 'points') updateSum();
+  }
+});
+app.addEventListener('change', (e) => {
+  if (state.view === 'edit' && e.target.type === 'radio' && e.target.dataset.qf) {
+    state.exam.questions[Number(e.target.dataset.q)].correct_answer = e.target.value;
+    state.dirty = true;
+  }
+});
+
+async function saveExam({ quiet = false } = {}) {
+  const e = state.exam;
+  const examFields = { id: e.id, title: e.title, description: e.description, duration_minutes: e.duration_minutes, pass_percent: e.pass_percent, open_at: e.open_at, close_at: e.close_at };
+  let saved = await api('save_exam', { exam: examFields });
+  state.exam.id = saved.id; // ถ้าบันทึกข้อสอบไม่ผ่าน ครั้งหน้าจะแก้ชุดเดิม ไม่สร้างซ้ำ
+  if (!saved.locked) saved = await api('save_questions', { exam_id: saved.id, questions: e.questions, mode: 'replace' });
+  state.exam = saved;
+  state.dirty = false;
+  if (!quiet) toast('บันทึกเรียบร้อย');
+  return saved;
+}
+
+async function withBusy(btn, fn) {
+  const buttons = [...app.querySelectorAll('[data-act="save"],[data-act="toggle-publish"]')];
+  buttons.forEach((b) => { b.disabled = true; });
+  try { await fn(); } catch (err) { toast(err.message, 'error'); } finally { buttons.forEach((b) => { b.disabled = false; }); }
+}
+
+// =========================================================
+// ผลสอบ / นำเข้า (Phase 4)
+// =========================================================
 function viewResults() {
-  shell(`<div class="main-head"><div><h1>ผลสอบ</h1></div></div>${stateHtml({ img: 'sleep', title: 'ยังไม่มีผลสอบ' })}`);
+  shell(`<div class="main-head"><div><h1>ผลสอบ</h1></div></div>${stateHtml({ img: 'sleep', title: 'เร็ว ๆ นี้', text: 'หน้าผลสอบจะเปิดใน Phase 4' })}`);
 }
 
 function viewImport() {
-  shell(`<div class="main-head"><div><h1>นำเข้าข้อสอบจาก Excel</h1></div></div>${stateHtml({ img: 'sleep', title: 'เร็ว ๆ นี้' })}`);
+  shell(`<div class="main-head"><div><h1>นำเข้าข้อสอบจาก Excel</h1></div></div>${stateHtml({ img: 'sleep', title: 'เร็ว ๆ นี้', text: 'การนำเข้า Excel จะเปิดใน Phase 4' })}`);
 }
 
-// ---------- ปุ่มต่าง ๆ ----------
+// =========================================================
+// ปุ่มต่าง ๆ
+// =========================================================
 app.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-go],[data-act]');
-  if (!el) return;
-  if (el.dataset.go) return go(el.dataset.go);
+  if (!el || el.disabled) return;
+  if (el.dataset.go) return go(el.dataset.go, { id: el.dataset.id || null });
+
   const act = el.dataset.act;
-  if (act === 'reload') location.reload();
-  if (act === 'reset-demo') {
-    const ok = await confirmBox({ img: 'surprised', title: 'ล้างข้อมูลทดลองทั้งหมด?', text: 'ชุดสอบและผลสอบจำลองในเครื่องนี้จะหายไป', ok: 'ล้างข้อมูล', danger: true, center: true });
-    if (ok) { await resetDemo(); location.reload(); }
+  const ex = state.exam;
+  switch (act) {
+    case 'reload': return location.reload();
+    case 'reset-demo': {
+      const ok = await confirmBox({ img: 'surprised', title: 'ล้างข้อมูลทดลองทั้งหมด?', text: 'ข้อมูลจำลองในเครื่องนี้จะกลับเป็นค่าเริ่มต้น', ok: 'ล้างข้อมูล', danger: true, center: true });
+      if (ok) { state.dirty = false; await resetDemo(); location.reload(); }
+      return;
+    }
+    case 'publish':
+      try { await api('set_published', { exam_id: el.dataset.id, publish: true }); toast('เผยแพร่แล้ว นักเรียนเห็นชุดสอบนี้แล้ว'); viewExams(); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    case 'save':
+      return withBusy(el, async () => { await saveExam(); renderEditor(); });
+    case 'toggle-publish':
+      return withBusy(el, async () => {
+        if (ex.is_published) {
+          const ok = await confirmBox({ title: 'ซ่อนชุดสอบนี้?', text: 'นักเรียนจะไม่เห็นชุดสอบนี้จนกว่าจะเผยแพร่อีกครั้ง', ok: 'ซ่อน', center: true });
+          if (!ok) return;
+        }
+        if (state.dirty || !ex.id) await saveExam({ quiet: true });
+        state.exam = await api('set_published', { exam_id: state.exam.id, publish: !state.exam.is_published });
+        toast(state.exam.is_published ? 'เผยแพร่แล้ว นักเรียนเห็นชุดสอบนี้แล้ว' : 'ซ่อนชุดสอบแล้ว');
+        renderEditor();
+      });
+    case 'delete-exam': {
+      const ok = await confirmBox({
+        img: 'surprised', title: 'ลบชุดสอบนี้?', danger: true, center: true, ok: 'ลบถาวร',
+        text: ex.locked ? 'ผลสอบของนักเรียนในชุดนี้จะถูกลบด้วย และกู้คืนไม่ได้' : 'ข้อสอบทั้งหมดในชุดนี้จะถูกลบ และกู้คืนไม่ได้',
+      });
+      if (!ok) return;
+      try { await api('delete_exam', { exam_id: ex.id }); state.dirty = false; toast('ลบชุดสอบแล้ว'); go('exams'); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    case 'add-q':
+      ex.questions.push(blankQuestion());
+      state.dirty = true;
+      refreshQuestions();
+      document.querySelector(`[data-qcard="${ex.questions.length - 1}"] textarea`)?.focus();
+      return;
+    case 'q-del': {
+      const i = Number(el.dataset.i);
+      const q = ex.questions[i];
+      if (q.question_text.trim() && !(await confirmBox({ title: `ลบข้อ ${i + 1}?`, ok: 'ลบ', danger: true, center: true }))) return;
+      ex.questions.splice(i, 1);
+      state.dirty = true;
+      return refreshQuestions();
+    }
+    case 'q-up':
+    case 'q-down': {
+      const i = Number(el.dataset.i);
+      const j = act === 'q-up' ? i - 1 : i + 1;
+      [ex.questions[i], ex.questions[j]] = [ex.questions[j], ex.questions[i]];
+      state.dirty = true;
+      return refreshQuestions();
+    }
   }
 });
 

@@ -72,6 +72,14 @@ Deno.test('ข้อมูลจากหน้าเว็บเขียนท
   }
 });
 
+Deno.test('save_questions ส่ง mode เฉพาะ replace / append และ set_published รับเฉพาะ true', async () => {
+  const { deps, calls } = makeDeps();
+  await handle(post({ action: 'save_questions', idToken: 't', data: { exam_id: 'e1', questions: [{}], mode: 'drop' } }), deps);
+  await handle(post({ action: 'set_published', idToken: 't', data: { exam_id: 'e1', publish: 'yes' } }), deps);
+  assertEq(calls[0].params.p_mode, 'replace');
+  assertEq(calls[1].params.p_publish, false);
+});
+
 Deno.test('body ไม่ใช่ JSON ได้ 400', async () => {
   const { deps } = makeDeps();
   const res = await handle(new Request('http://x/api', { method: 'POST', body: 'not json' }), deps);
