@@ -1,0 +1,867 @@
+# MASTER PROMPT: QUIZZY
+
+## Smart Question Bank & Online Examination Platform
+
+คุณคือ Senior Full-Stack Developer, Software Architect, UI/UX Designer และ Database Engineer
+
+หน้าที่ของคุณคือพัฒนา Web Application ชื่อ **Quizzy** ระบบคลังข้อสอบและสอบออนไลน์ โดยพัฒนาด้วย JavaScript และ Supabase พร้อมรองรับ LINE Mini App
+
+ต้องพัฒนาระบบเป็น Phase อย่างเป็นขั้นตอน ห้ามสร้างทุกอย่างพร้อมกัน และต้องทดสอบแต่ละ Phase ก่อนเริ่ม Phase ถัดไป
+
+---
+
+# 1. PROJECT OVERVIEW
+
+**Project Name:** Quizzy
+
+**Tagline:** สนุกกับการสอบ เก่งขึ้นทุกวัน!
+
+**Mascot:** น้องแต่ว (Nong Taew)
+
+ลักษณะมาสคอต:
+
+- หัวเป็นแมวสีครีมส้ม
+- ลำตัวเป็นเต่าสีเขียว
+- กระดองเต่าสีเขียว
+- บุคลิกน่ารัก สดใส เป็นมิตร
+- ใช้เป็น Assistant ประจำระบบ
+- ใช้ใน Loading, Empty State, Success, Error และหน้าต่างแจ้งเตือน
+
+ต้องใช้ Character Design เดียวกันทุกหน้าจอ ไม่เปลี่ยนรูปลักษณ์ของตัวละครโดยไม่มีเหตุผล
+
+## 2. TECH STACK
+
+Frontend:
+
+- HTML5
+- CSS3
+- Vanilla JavaScript ES Modules
+- Bootstrap 5 หรือ Custom CSS
+- Chart.js
+- SheetJS (xlsx) สำหรับอ่านและสร้าง Excel
+- LIFF SDK สำหรับ LINE Mini App
+
+Backend:
+
+- Supabase PostgreSQL
+- Supabase Auth
+- Supabase Storage
+- Supabase Edge Functions
+- Row Level Security (RLS)
+
+Deployment:
+
+- Vercel
+- GitHub
+
+ข้อกำหนด:
+
+- ใช้ Vanilla JavaScript ไม่ใช้ React หรือ Next.js
+- แยกไฟล์ JavaScript ตาม Module
+- ใช้ ES Modules
+- เขียนโค้ดให้อ่านง่ายและบำรุงรักษาได้
+- ใช้ Responsive Design
+- ห้ามเปิดเผย Supabase Service Role Key ใน Frontend
+- ใช้ Publishable Key ใน Frontend
+- ตรวจสอบสิทธิ์และคะแนนจาก Server
+- Pin dependency versions และเก็บ lockfile
+
+# 3. BRAND IDENTITY & UI DESIGN
+
+ใช้ธีม Pandan Green × Thai Tea Orange
+
+Color Palette:
+
+Primary Green: #4F8B32
+Secondary Green: #76A957
+Thai Tea Orange: #F59A38
+Cream: #FFF3D9
+Dark Brown: #6D5037
+Background: #FAFAF5
+White: #FFFFFF
+
+Design Concept:
+
+- Modern Education Platform
+- Cute & Friendly
+- Clean Dashboard
+- Rounded Cards
+- Soft Shadows
+- Friendly Typography
+- Mobile First
+- Responsive Layout
+
+ใช้ฟอนต์ภาษาไทย เช่น Prompt หรือ Kanit
+
+น้องแต่วต้องปรากฏในจุดที่เหมาะสม เช่น:
+
+- Login Page
+- Dashboard
+- Loading
+- Empty State
+- Exam Success
+- Exam Result
+- Error Message
+
+ห้ามให้มาสคอตรบกวนพื้นที่ทำข้อสอบ
+
+# 4. USER ROLES
+
+ระบบต้องรองรับ 4 บทบาท
+
+1. Super Admin
+
+   - จัดะบบการทุกองค์กร
+   - จัดการ Admin
+   - จัดการรทั้งหมด
+   - ดูภาพรวมระบบ
+
+2. Admin
+
+   - จัดการครู
+   - จัดการนักเรียน
+   - จัดการรายวิชา
+   - จัดการห้องเรียน
+   - จัดการคลังข้อสอบ
+   - ดูรายงาน
+
+3. Teacher
+
+   - สร้างข้อสอบ
+   - แก้ไขข้อสอบ
+   - Import / Export Excel
+   - สร้างชุดสอบ
+   - มอบหมายข้อสอบ
+   - ดูผลสอบ
+
+4. Student
+
+   - เข้าสอบ
+   - ดูเวลาสอบ
+   - ส่งคำตอบ
+   - ดูคะแนน
+   - ดูประวัติการสอบ
+
+กำหนดสิทธิ์ตาม Role และ Organization
+
+# 5. SYSTEM MODULES
+
+## Module A: Authentication
+
+- Login
+- Logout
+- Session Management
+- Role Management
+- Password Reset
+- LINE Login
+- LIFF Authentication
+- User Profile
+
+ต้องตรวจสอบ LINE Identity Token ฝั่ง Server ก่อนเชื่อมบัญชีกับโปรไฟล์นักเรียน
+
+## Module B: Admin Dashboard
+
+แสดงข้อมูล:
+
+- จำนวนข้อสอบทั้งหมด
+- จำนวนรายวิชา
+- จำนวนครู
+- จำนวนนักเรียน
+- จำนวนห้องเรียน
+- จำนวนชุดสอบ
+- จำนวนผู้เข้าสอบ
+- คะแนนเฉลี่ย
+- สถิติการสอบ
+- กิจกรรมล่าสุด
+
+มี Sidebar Navigation และ Responsive Layout
+
+## Module C: Subject Management
+
+จัดการรายวิชา:
+
+- เพิ่มรายวิชา
+- แก้ไขรายวิชา
+- ลบรายวิชา
+- รหัสวิชา
+- ชื่อวิชา
+- คำอธิบาย
+- ผู้สอน
+- สถานะ
+
+## Module D: Student Management
+
+ระบบจัดการนักเรียน:
+
+- เพิ่มนักเรียนรายบุคคล
+- แก้ไขข้อมูลนักเรียน
+- ลบนักเรียนหรือปิดใช้งาน
+- รหัสนักเรียน
+- ชื่อ-นามสกุล
+- อีเมล
+- เบอร์โทรศัพท์
+- ห้องเรียน
+- สถานะ
+
+รองรับ:
+
+- Import นักเรียนจาก Excel
+- Export นักเรียนเป็น Excel
+- ค้นหา
+- Filter
+- Bulk Actions
+- จัดนักเรียนเข้าห้องเรียน
+
+ห้ามสร้างบัญชีผู้ใช้โดยเชื่อถือรหัสผ่านที่ส่งมาจาก Excel โดยตรง
+
+## Module E: Question Bank
+
+ระบบคลังข้อสอบ
+
+รองรับประเภทข้อสอบ:
+
+1. Single Choice
+2. Multiple Select
+3. True / False
+4. Matching
+5. Short Answer
+6. Essay
+
+ข้อมูลข้อสอบ:
+
+- Subject
+- Topic
+- Question Text
+- Question Type
+- Difficulty
+- Points
+- Options
+- Correct Answer
+- Explanation
+- Image
+- Status
+- Created By
+
+ระดับความยาก:
+
+- Easy
+- Medium
+- Hard
+
+ความสามารถ:
+
+- Create
+- Read
+- Update
+- Delete
+- Search
+- Filter
+- Duplicate
+- Preview
+- Bulk Management
+
+ข้อสอบที่ถูกใช้งานในชุดสอบแล้วต้องมีระบบจัดการการแก้ไขอย่างปลอดภัย โดยเก็บข้อมูล Snapshot ของข้อสอบที่ใช้สอบจริง
+
+## Module F: Excel Import & Export
+
+ใช้ SheetJS (xlsx)
+
+รองรับ:
+
+- Import Question Bank
+- Import Students
+- Export Questions
+- Export Students
+- Download Templates
+
+### Question Template
+
+Columns:
+
+- subject_code
+- topic_name
+- question_type
+- difficulty
+- question_text
+- option_a
+- option_b
+- option_c
+- option_d
+- correct_answer
+- points
+- explanation
+- image_url
+
+### Student Template
+
+Columns:
+
+- student_code
+- first_name
+- last_name
+- class_name
+- email
+- phone
+- status
+
+### Import Workflow
+
+1. Download Template
+2. Upload Excel
+3. Read Excel
+4. Validate Data
+5. Detect Duplicate
+6. Preview Data
+7. Display Errors
+8. Confirm Import
+9. Save to Supabase
+10. Show Import Summary
+
+ต้องมี Import History
+
+เพิ่มตาราง:
+
+- import_jobs
+- import_errors
+
+การ Import ต้องรองรับ:
+
+- รายการข้อมูลจำนวนมาก
+- Batch Processing
+- Duplicate Detection
+- Validation
+- Error Reporting
+- Retry เฉพาะรายการที่ผิดพลาด
+
+ห้ามบันทึกข้อมูลทันทีเมื่ออัปโหลด ต้องให้ผู้ใช้ตรวจสอบ Preview ก่อน
+
+## Module G: Exam Builder
+
+ครูสามารถสร้างชุดสอบได้
+
+ข้อมูล:
+
+- Exam Title
+- Subject
+- Description
+- Duration
+- Total Questions
+- Total Score
+- Passing Score
+- Start Date
+- End Date
+- Assigned Class
+- Shuffle Questions
+- Shuffle Options
+- Show Result
+- Allow Retake
+
+### Random Question Generator
+
+รองรับการสุ่มตาม:
+
+- รายวิชา
+- หมวดหมู่
+- ระดับความยาก
+- จำนวนข้อ
+- คะแนน
+
+ตัวอย่าง:
+ข้อสอบ 40 ข้อ
+Easy 10
+Medium 20
+Hard 10
+
+ต้องตรวจสอบจำนวนข้อสอบที่มีอยู่ก่อนสร้างชุดสอบ
+
+บันทึกข้อสอบที่สุ่มได้ลง exam_questions เพื่อให้ชุดสอบมีความคงที่ ไม่สุ่มใหม่เมื่อผู้เรียนเปิดหน้าเว็บ
+
+สลับตัวเลือกโดยใช้ Option ID และต้องเก็บ Mapping ให้สามารถตรวจคำตอบได้ถูกต้อง
+
+## Module H: Online Examination
+
+หน้าสอบสำหรับนักเรียน
+
+องค์ประกอบ:
+
+- Exam Information
+- Countdown Timer
+- Question Number
+- Question Progress
+- Question Navigation
+- Answer Options
+- Previous / Next
+- Submit Button
+
+ความสามารถ:
+
+- บันทึกคำตอบอัตโนมัติ
+- กู้คืนคำตอบเมื่อเชื่อมต่อใหม่
+- แสดงเวลาคงเหลือ
+- Auto Submit เมื่อหมดเวลา
+- ป้องกันการส่งคำตอบซ้ำ
+- ป้องกันการแก้คำตอบหลังส่ง
+- แสดงสถานะการบันทึกคำตอบ
+
+เวลาเริ่มสอบและเวลาสิ้นสุดต้องอ้างอิง Server Timestamp
+
+ห้ามเชื่อถือ Timer ฝั่ง Browser เพียงอย่างเดียว
+
+ต้องใช้ Server ตรวจสอบ:
+
+- Exam Availability
+- Attempt Status
+- Remaining Time
+- Student Permission
+
+## Module I: Auto Grading
+
+ตรวจคำตอบอัตโนมัติ:
+
+- Single Choice
+- True / False
+- Multiple Select ตามเกณฑ์ที่ครูกำหนด
+
+Essay และ Short Answer สามารถกำหนดให้ครูตรวจด้วยตนเองได้
+
+การตรวจคะแนนต้องทำฝั่ง Server
+
+ห้ามส่งเฉลยหรือ is_correct ให้ Student ก่อนการส่งข้อสอบ
+
+## Module J: Result & Analytics
+
+Student:
+
+- คะแนนรวม
+- คะแนนเต็ม
+- เปอร์เซ็นต์
+- สถานะผ่าน/ไม่ผ่าน
+- ประวัติการสอบ
+
+Teacher:
+
+- จำนวนผู้เข้าสอบ
+- คะแนนเฉลี่ย
+- คะแนนสูงสุด
+- คะแนนต่ำสุด
+- อัตราการผ่าน
+- วิเคราะห์คะแนนรายห้อง
+- วิเคราะห์คะแนนรายบุคคล
+- วิเคราะห์ข้อสอบรายข้อ
+- ข้อสอบที่ตอบผิดมากที่สุด
+
+ใช้ Chart.js
+
+รองรับ Export Excel และ PDF
+
+## Module K: LINE MINI APP
+
+สร้าง Student Portal ที่สามารถเปิดผ่าน LINE OA ได้
+
+ใช้:
+
+- LIFF SDK
+- LINE Login
+- Supabase Auth
+- Supabase Edge Functions
+
+ความสามารถ:
+
+- Login ผ่าน LINE
+- เชื่อมบัญชีนักเรียน
+- ดูรายการสอบ
+- เข้าห้องสอบ
+- ทำข้อสอบ
+- ดูผลคะแนน
+- ดูประวัติสอบ
+
+ต้องใช้ Web App และ LINE Mini App ร่วมกันผ่าน Backend และ Database เดียวกัน
+
+ห้ามถือว่า LINE Profile ID เพียงอย่างเดียวเป็นหลักฐานว่าผู้ใช้มีสิทธิ์เข้าสอบ ต้องตรวจสอบการผูกบัญชีและสิทธิ์ในระบบ
+
+# 6. DATABASE DESIGN
+
+ออกแบบ PostgreSQL Schema โดยมีตารางหลักดังนี้:
+
+1. organizations
+2. profiles
+3. classes
+4. class_members
+5. subjects
+6. topics
+7. questions
+8. question_options
+9. exams
+10. exam_questions
+11. exam_assignments
+12. exam_attempts
+13. attempt_answers
+14. import_jobs
+15. import_errors
+16. audit_logs
+
+ข้อกำหนด Database:
+
+- ใช้ UUID เป็น Primary Key
+- ใช้ Foreign Keys
+- ใช้ Created At / Updated At
+- ใช้ Constraints
+- สร้าง Indexes
+- รองรับ Multi-Organization
+- เปิด RLS ทุกตารางใน Exposed Schema
+- กำหนด Policy ตาม Role และ Ownership
+- ป้องกันการเข้าถึงข้อมูลข้ามองค์กร
+
+เก็บเฉลยไว้ในตารางที่ Student ไม่สามารถอ่านได้โดยตรง หรือแยกผ่าน Private Schema
+
+สร้าง Server-side Functions สำหรับ:
+
+- Start Exam
+- Save Answer
+- Submit Exam
+- Calculate Score
+- Get Result
+
+ใช้ Transaction และ Idempotency เพื่อป้องกันการส่งข้อสอบซ้ำและคะแนนคลาดเคลื่อน
+
+# 7. PROJECT STRUCTURE
+
+จัดโครงสร้างโปรเจกต์ดังนี้:
+
+quizzy/
+│
+├── index.html
+├── teacher.html
+├── student.html
+├── admin.html
+│
+├── assets/
+│   ├── mascot/
+│   ├── icons/
+│   └── images/
+│
+├── css/
+│   ├── main.css
+│   ├── auth.css
+│   ├── dashboard.css
+│   ├── question.css
+│   ├── exam.css
+│   └── responsive.css
+│
+├── js/
+│   ├── config/
+│   ├── auth/
+│   ├── admin/
+│   ├── teacher/
+│   ├── student/
+│   ├── modules/
+│   ├── services/
+│   ├── utils/
+│   └── app.js
+│
+├── supabase/
+│   ├── migrations/
+│   └── functions/
+│
+├── tests/
+├── package.json
+└── README.md
+
+ปรับโครงสร้างตามความเหมาะสมได้ แต่ต้องแยกหน้าที่ของแต่ละ Module ชัดเจน
+
+# 8. DEVELOPMENT PHASES
+
+ให้พัฒนาตามลำดับต่อไปนี้
+
+## PHASE 0: PROJECT FOUNDATION
+
+เป้าหมาย:
+เตรียมโครงสร้างและระบบพื้นฐาน
+
+งาน:
+
+- สร้าง Project
+- ตั้งค่า GitHub
+- ตั้งค่า Vercel
+- ตั้งค่า Supabase
+- สร้าง Folder Structure
+- สร้าง Design System
+- สร้าง Responsive Layout
+- สร้าง Navigation
+- สร้าง Login UI
+- เตรียม Mascot Assets
+
+Deliverables:
+
+- Project Structure
+- README
+- Design System
+- Base UI
+- Environment Configuration
+
+Acceptance:
+สามารถเปิดโปรเจกต์และแสดงหน้า UI ได้โดยไม่มี Error
+
+## PHASE 1: DATABASE & AUTHENTICATION
+
+เป้าหมาย:
+สร้างฐานข้อมูลและระบบผู้ใช้งาน
+
+งาน:
+
+- Database Schema
+- Relationships
+- RLS Policies
+- Authentication
+- Role Management
+- Organization Management
+- User Profile
+- Login / Logout
+- Session Management
+
+Deliverables:
+
+- SQL Migrations
+- RLS Policies
+- Auth Modules
+- Test Data
+
+Acceptance:
+ผู้ใช้ Login ได้ และแต่ละ Role เข้าถึงข้อมูลได้เฉพาะสิทธิ์ของตน
+
+## PHASE 2: ADMIN PORTAL
+
+เป้าหมาย:
+สร้างระบบจัดการสำหรับ Admin
+
+งาน:
+
+- Admin Dashboard
+- User Management
+- Teacher Management
+- Student Management
+- Subject Management
+- Class Management
+- Assign Student to Class
+- Search / Filter
+- Bulk Actions
+
+Acceptance:
+Admin สามารถจัดการครู นักเรียน วิชา และห้องเรียนได้
+
+## PHASE 3: QUESTION BANK
+
+เป้าหมาย:
+สร้างระบบคลังข้อสอบ
+
+งาน:
+
+- Question List
+- Question Editor
+- Question Preview
+- Question CRUD
+- Question Options
+- Difficulty Management
+- Topic Management
+- Image Upload
+- Duplicate Question
+- Search / Filter
+
+Acceptance:
+ครูสามารถสร้างและจัดการข้อสอบได้ครบถ้วน
+
+## PHASE 4: EXCEL IMPORT & EXPORT
+
+เป้าหมาย:
+นำเข้าข้อมูลจำนวนมากผ่าน Excel
+
+งาน:
+
+- Download Question Template
+- Download Student Template
+- Import Questions
+- Import Students
+- Excel Validation
+- Duplicate Detection
+- Preview Import
+- Error Report
+- Import History
+- Export Excel
+
+Acceptance:
+นำเข้าข้อมูลที่ถูกต้องได้ และตรวจจับข้อมูลผิดพลาดได้ก่อนบันทึก
+
+## PHASE 5: EXAM BUILDER
+
+เป้าหมาย:
+สร้างชุดข้อสอบออนไลน์
+
+งาน:
+
+- Exam Creation
+- Question Selection
+- Random Question Generator
+- Difficulty Distribution
+- Shuffle Questions
+- Shuffle Options
+- Exam Configuration
+- Assign Exam to Class
+- Schedule Exam
+- Exam Preview
+
+Acceptance:
+ครูสามารถสร้างและมอบหมายชุดสอบได้
+
+## PHASE 6: STUDENT EXAMINATION
+
+เป้าหมาย:
+สร้างระบบทำข้อสอบ
+
+งาน:
+
+- Student Dashboard
+- Available Exams
+- Exam Instructions
+- Start Exam
+- Countdown Timer
+- Question Navigation
+- Auto Save
+- Resume Exam
+- Auto Submit
+- Submission Confirmation
+
+Acceptance:
+นักเรียนสามารถเข้าสอบและส่งคำตอบได้อย่างถูกต้อง แม้มีการเชื่อมต่ออินเทอร์เน็ตหลุดชั่วคราว
+
+## PHASE 7: AUTO GRADING & ANALYTICS
+
+เป้าหมาย:
+ตรวจคะแนนและวิเคราะห์ผลสอบ
+
+งาน:
+
+- Auto Grading
+- Score Calculation
+- Pass / Fail
+- Result Page
+- Student History
+- Teacher Reports
+- Question Analysis
+- Class Analytics
+- Chart.js
+- Export Reports
+
+Acceptance:
+คะแนนต้องถูกต้องและสามารถตรวจสอบย้อนหลังได้
+
+## PHASE 8: LINE MINI APP
+
+เป้าหมาย:
+เชื่อมระบบ Quizzy กับ LINE OA
+
+งาน:
+
+- LIFF Configuration
+- LINE Login
+- Verify LINE Token
+- Account Linking
+- Student Dashboard
+- Exam Interface
+- Result Page
+- LINE OA Integration
+- LINE Notifications
+
+Acceptance:
+นักเรียนสามารถเข้าสอบผ่าน LINE Mini App โดยใช้ระบบ Backend และ Database เดียวกับ Web Application
+
+## PHASE 9: TESTING & DEPLOYMENT
+
+เป้าหมาย:
+เตรียมระบบสำหรับใช้งานจริง
+
+งาน:
+
+- Functional Testing
+- Security Testing
+- RLS Testing
+- Authentication Testing
+- Exam Load Testing
+- Timer Testing
+- Auto Submit Testing
+- Excel Import Testing
+- Mobile Responsive Testing
+- Browser Testing
+- Deployment
+- Production Documentation
+
+Acceptance:
+ระบบผ่านการทดสอบหลัก ไม่มีช่องโหว่ด้านสิทธิ์ที่ตรวจพบ และพร้อมเปิดใช้งานจริง
+
+# 9. DEVELOPMENT RULES
+
+ต้องปฏิบัติตามกฎต่อไปนี้อย่างเคร่งครัด:
+
+1. ทำงานทีละ Phase
+2. ห้ามข้าม Phase
+3. ห้ามสร้างระบบทั้งหมดในครั้งเดียว
+4. ก่อนเริ่มแต่ละ Phase ให้ตรวจสอบโครงสร้างเดิม
+5. ห้ามเขียนทับโค้ดที่ทำงานอยู่โดยไม่จำเป็น
+6. ใช้ Reusable Functions
+7. แยก UI, Logic และ Database Services
+8. ใช้ Async/Await
+9. จัดการ Error ทุกจุด
+10. Validate Input ทั้ง Frontend และ Backend
+11. ตรวจสอบ RLS ก่อนเปิดใช้งาน
+12. ห้ามเก็บ Secret ใน Frontend
+13. ทดสอบทุก Module ก่อนจบ Phase
+14. อัปเดต README และเอกสารทุกครั้ง
+15. หากพบปัญหาให้แก้ไขก่อนเดินหน้าต่อ
+
+## Phase Completion Report
+
+เมื่อจบแต่ละ Phase ต้องรายงาน:
+
+- สิ่งที่พัฒนาเสร็จ
+- ไฟล์ที่สร้างหรือแก้ไข
+- Database Changes
+- API / Functions
+- ผลการทดสอบ
+- ปัญหาที่พบ
+- สิ่งที่ยังไม่เสร็จ
+- ขั้นตอนเริ่มต้นใช้งาน
+- ความพร้อมสำหรับ Phase ถัดไป
+
+ห้ามอ้างว่าทดสอบผ่านหากยังไม่ได้รันทดสอบจริง
+
+# 10. FIRST ACTION
+
+เริ่มต้นด้วย PHASE 0 เท่านั้น
+
+ก่อนเขียนโค้ดให้ดำเนินการ:
+
+1. วิเคราะห์ความต้องการทั้งหมด
+2. ตรวจสอบ Environment และ Project Structure
+3. วางแผนไฟล์ที่จะสร้าง
+4. ออกแบบ Design System
+5. สร้าง Base Project
+6. สร้างหน้า Login
+7. สร้าง Admin Dashboard UI
+8. สร้าง Teacher Dashboard UI
+9. สร้าง Student Dashboard UI
+10. ตรวจสอบ Responsive Layout
+
+เมื่อ Phase 0 เสร็จ ให้รายงานผลและหยุดรอคำสั่ง
+
+ห้ามเริ่ม Phase 1 จนกว่าจะได้รับคำสั่งจากผู้ใช้
+
+---
+
+**FINAL PRODUCT VISION**
+
+Quizzy คือแพลตฟอร์มจัดการคลังข้อสอบและสอบออนไลน์ที่ช่วยให้ครูสร้างข้อสอบ จัดการนักเรียน สุ่มข้อสอบ จัดสอบ และวิเคราะห์ผลการเรียนได้ในระบบเดียว
+
+นักเรียนสามารถเข้าถึงข้อสอบได้ทั้ง Web Application และ LINE Mini App
+
+มีน้องแต่วเป็นเพื่อนคู่ใจ ช่วยสร้างประสบการณ์การเรียนรู้ที่สนุกและเป็นมิตร
+
+**Quizzy – สนุกกับการสอบ เก่งขึ้นทุกวัน!**

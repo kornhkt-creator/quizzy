@@ -1,0 +1,14 @@
+# เครื่องมือ / ระบบ
+.claude/
+.vercel/
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# ความลับ ห้าม commit
+.env
+.env.*
+
+# ไฟล์ภาพต้นฉบับขนาดใหญ่ (ใช้ไฟล์ใน assets/reference แทน)
+/Cute Cat-Turtle*.png

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quizzy Lite: UX/UI Mockup</title>
+<link rel="icon" href="../assets/mascot/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --green:#4F8B32; --green2:#76A957; --green-soft:#E7F1DC; --green-bg:#F1F6EA;
+  --orange:#F59A38; --orange-d:#E3801C; --orange-soft:#FDEBD5;
+  --cream:#FFF3D9; --brown:#6D5037; --white:#FFFFFF;
+  --text:#3B382F; --muted:#8E8B80; --line:#ECEADF; --red:#E25B4B; --red-soft:#FCE7E3;
+  --r-lg:22px; --r-md:16px; --r-sm:12px; --pill:999px;
+  --shadow:0 6px 18px rgba(70,90,40,.08); --shadow-lg:0 18px 40px rgba(70,90,40,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Kanit',sans-serif;color:var(--text);background:var(--green-bg);
+  background-image:radial-gradient(circle at 0 0,#DDEBCB 0,transparent 30%),radial-gradient(circle at 100% 100%,#E4EFD5 0,transparent 28%);
+  padding:48px 40px 80px;min-height:100vh}
+svg.i{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- page layout ---------- */
+.intro{display:flex;gap:48px;align-items:center;max-width:1400px;margin:0 auto 40px}
+.intro .icon{width:132px;height:132px;border-radius:30px;box-shadow:var(--shadow-lg)}
+.logo{font-size:56px;font-weight:700;color:var(--brown);line-height:1}
+.logo span{color:var(--green)}
+.tagline{font-size:20px;color:var(--brown);margin-top:6px}
+.intro p{color:var(--muted);margin-top:10px;max-width:520px}
+.swatches{display:flex;gap:10px;margin-top:16px}
+.swatches i{width:34px;height:34px;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(0,0,0,.05)}
+.section-title{max-width:1400px;margin:56px auto 20px;font-size:24px;font-weight:600;color:var(--brown);display:flex;align-items:center;gap:12px}
+.section-title small{font-size:15px;font-weight:400;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:36px 28px;max-width:1400px;margin:0 auto}
+.frame{display:flex;flex-direction:column;align-items:center;gap:12px}
+.caption{font-size:14px;color:var(--muted);text-align:center;max-width:300px}
+.caption b{color:var(--brown);font-weight:600;display:block;font-size:15px}
+
+/* ---------- phone ---------- */
+.phone{width:320px;height:660px;border-radius:40px;background:#fff;padding:8px;box-shadow:var(--shadow-lg);position:relative}
+.screen{width:100%;height:100%;border-radius:32px;overflow:hidden;background:#FAFBF6;display:flex;flex-direction:column;position:relative}
+.status{height:34px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:13px;font-weight:600;color:var(--text);z-index:2}
+.status .sig{display:flex;gap:4px;align-items:center}
+.status .sig i{display:block;width:16px;height:9px;border-radius:2px;background:var(--text)}
+.status.light{color:#fff}.status.light .sig i{background:#fff}
+.body{flex:1;overflow:hidden;padding:4px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.appbar{display:flex;align-items:center;justify-content:space-between;padding:6px 14px 10px;flex:none}
+.appbar h3{font-size:17px;font-weight:600}
+.appbar .btn-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;color:var(--text)}
+
+/* ---------- components ---------- */
+.card{background:#fff;border-radius:var(--r-md);box-shadow:var(--shadow);padding:14px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:var(--pill);font:500 16px 'Kanit';border:0;cursor:pointer;width:100%}
+.btn-primary{background:var(--orange);color:#fff;box-shadow:0 6px 14px rgba(245,154,56,.35)}
+.btn-primary:hover{background:var(--orange-d)}
+.btn-secondary{background:#fff;color:var(--text);border:1.5px solid var(--line)}
+.btn-sm{height:32px;width:auto;padding:0 14px;font-size:14px;box-shadow:none}
+.btn-green{background:var(--green-soft);color:var(--green)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:var(--pill);font-size:12px;font-weight:500}
+.pill.green{background:var(--green-soft);color:var(--green)}
+.pill.orange{background:var(--orange-soft);color:var(--orange-d)}
+.pill.gray{background:#F0EFEA;color:var(--muted)}
+.pill.red{background:var(--red-soft);color:var(--red)}
+.tile{width:44px;height:44px;border-radius:14px;background:var(--cream);display:grid;place-items:center;color:var(--orange-d);flex:none}
+.tile.g{background:var(--green-soft);color:var(--green)}
+.list-row{display:flex;align-items:center;gap:12px}
+.list-row .t{flex:1;min-width:0}
+.list-row .t b{display:block;font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-row .t small{color:var(--muted);font-size:12.5px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin-top:2px}
+.sec h4{font-size:16px;font-weight:600}
+.sec a{font-size:13px;color:var(--orange-d);text-decoration:none}
+.progress{height:8px;border-radius:var(--pill);background:var(--cream);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--orange);border-radius:var(--pill)}
+.input{display:flex;flex-direction:column;gap:4px}
+.input label{font-size:13px;color:var(--muted)}
+.input div{height:46px;border-radius:var(--r-sm);border:1.5px solid var(--line);background:#FDFDF9;display:flex;align-items:center;padding:0 14px;font-size:15px}
+.input div.focus{border-color:var(--green2);box-shadow:0 0 0 3px var(--green-soft)}
+.tabbar{flex:none;height:64px;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;padding-bottom:4px}
+.tabbar a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:#A6A49A;text-decoration:none}
+.tabbar a.on{color:var(--orange-d)}
+.avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#FFD7A8,#F59A38);display:grid;place-items:center;color:#fff;font-weight:600;flex:none;border:2px solid #fff;box-shadow:var(--shadow)}
+.bubble{position:absolute;background:#fff;border-radius:16px;padding:8px 12px;font-size:13.5px;font-weight:500;color:var(--brown);box-shadow:var(--shadow);line-height:1.35}
+.bubble::after{content:"";position:absolute;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
+.bubble.bl::after{left:22px;bottom:-5px}
+.bubble.br::after{right:22px;bottom:-5px}
+.leaf{position:absolute;width:56px;opacity:.9}
+
+/* ---------- welcome ---------- */
+.hero{position:relative;height:350px;flex:none;margin-top:-34px;padding-top:34px;
+  background:radial-gradient(circle at 50% 60%,#FFF6DF 0,#FFF6DF 30%,transparent 60%),linear-gradient(160deg,#9BC77B 0%,#C9E2A8 45%,#FCD8A6 100%);overflow:hidden}
+.hero .logo-s{text-align:center;font-size:34px;font-weight:700;color:var(--brown);line-height:1;margin-top:8px}
+.hero .logo-s span{color:var(--green)}
+.hero .tag{text-align:center;color:var(--brown);font-size:14px;margin-top:2px}
+.hero img.m{position:absolute;width:190px;left:50%;transform:translateX(-50%);bottom:-6px}
+.wave{position:absolute;left:0;right:0;bottom:-1px;height:28px}
+
+/* ---------- exam ---------- */
+.q-num{display:inline-flex;align-items:center;justify-content:center;height:26px;padding:0 12px;border-radius:var(--pill);background:var(--green-soft);color:var(--green);font-size:13px;font-weight:600}
+.opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-md);background:#fff;border:2px solid var(--line);font-size:16px;cursor:pointer;transition:.15s}
+.opt .k{width:32px;height:32px;border-radius:50%;background:#F4F3EC;display:grid;place-items:center;font-weight:600;color:var(--muted);flex:none}
+.opt.sel{border-color:var(--green2);background:#F3F9EC}
+.opt.sel .k{background:var(--green);color:#fff}
+.timer{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:var(--pill);background:#fff;box-shadow:var(--shadow);font-weight:600;font-size:16px;color:var(--brown);font-variant-numeric:tabular-nums}
+.timer.warn{background:var(--orange);color:#fff}
+.exam-foot{flex:none;display:flex;gap:10px;padding:12px 16px 18px;background:#fff;border-top:1px solid var(--line)}
+.grid-btn{width:48px;height:48px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;background:#fff;flex:none;color:var(--text)}
+.saved{font-size:12px;color:var(--green);display:flex;align-items:center;gap:4px}
+.overlay{position:absolute;inset:0;background:rgba(40,45,30,.45);display:flex;align-items:flex-end;z-index:5}
+.sheet{background:#fff;width:100%;border-radius:28px 28px 0 0;padding:20px 20px 24px;text-align:center;position:relative}
+.sheet img{width:104px;margin-top:-70px}
+.nums{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0 18px}
+.nums span{height:36px;border-radius:12px;display:grid;place-items:center;font-weight:500;background:var(--green-soft);color:var(--green)}
+.nums span.miss{background:var(--orange-soft);color:var(--orange-d);box-shadow:inset 0 0 0 2px var(--orange)}
+
+/* ---------- result ---------- */
+.sun{position:relative;height:300px;flex:none;margin-top:-34px;overflow:hidden;
+  background:repeating-conic-gradient(from 0deg at 50% 62%,#FFF1D2 0deg 10deg,#FFE6BB 10deg 20deg)}
+.sun::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 62%,rgba(255,255,255,.9) 0,rgba(255,255,255,0) 45%)}
+.sun img{position:absolute;width:180px;left:50%;transform:translateX(-50%);bottom:10px;z-index:1}
+.score-card{margin:-26px 16px 0;position:relative;z-index:2;text-align:center;padding:20px 16px}
+.score{font-size:54px;font-weight:700;color:var(--brown);line-height:1.05}
+.score small{font-size:26px;color:var(--muted);font-weight:500}
+.mini-stats{display:flex;gap:8px;margin-top:14px}
+.mini-stats div{flex:1;background:#FAFAF4;border-radius:12px;padding:8px 4px;font-size:12px;color:var(--muted)}
+.mini-stats b{display:block;font-size:15px;color:var(--text);font-weight:600}
+
+/* ---------- states ---------- */
+.state{width:220px;background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow);padding:22px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.state img{height:96px}
+.state b{font-weight:600;color:var(--brown)}
+.state p{font-size:13px;color:var(--muted)}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.bounce{animation:bounce 1s ease-in-out infinite}
+.dots{display:flex;gap:6px}.dots i{width:7px;height:7px;border-radius:50%;background:var(--orange);animation:bounce 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+
+/* ---------- desktop (teacher) ---------- */
+.desk{width:1180px;max-width:100%;border-radius:18px;background:#fff;box-shadow:var(--shadow-lg);overflow:hidden}
+.chrome{height:38px;background:#F3F4EE;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--line)}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#E3E1D8}
+.chrome .url{margin-left:16px;background:#fff;border-radius:8px;padding:3px 14px;font-size:12.5px;color:var(--muted)}
+.app{display:flex;height:640px;background:#FAFBF6}
+.side{width:224px;flex:none;background:#fff;border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:4px}
+.side .brand{display:flex;align-items:center;gap:10px;padding:0 6px 18px}
+.side .brand img{width:40px;border-radius:11px}
+.side .brand b{font-size:22px;font-weight:700;color:var(--brown)}.side .brand b span{color:var(--green)}
+.nav{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;border-radius:var(--pill);color:var(--muted);font-size:15px}
+.nav.on{background:var(--orange);color:#fff;box-shadow:0 6px 14px rgba(245,154,56,.3)}
+.side .me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 8px;border-top:1px solid var(--line);font-size:14px}
+.side .me small{display:block;color:var(--muted);font-size:12px}
+.main{flex:1;padding:24px 28px;overflow:hidden;display:flex;flex-direction:column;gap:18px}
+.main-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.main-head h2{font-size:24px;font-weight:600;color:var(--brown)}
+.main-head p{color:var(--muted);font-size:14px}
+.head-actions{display:flex;gap:10px}
+.head-actions .btn{width:auto;padding:0 20px;height:42px;font-size:15px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{display:flex;align-items:center;gap:12px}
+.stat b{font-size:26px;font-weight:600;line-height:1.1;display:block}
+.stat small{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{background:var(--cream);color:var(--brown);font-weight:500;text-align:left;padding:10px 12px}
+th:first-child{border-radius:10px 0 0 10px}th:last-child{border-radius:0 10px 10px 0}
+td{padding:10px 12px;border-bottom:1px solid var(--line)}
+tr.err td{background:var(--red-soft)}
+tr.err td.why{color:var(--red);font-weight:500}
+.cols{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;min-height:0}
+.bar-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.bar-row .top{display:flex;justify-content:space-between;font-size:14px}
+.bar-row .top span{color:var(--muted);font-size:13px}
+.exam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.exam-card{display:flex;flex-direction:column;gap:10px;padding:18px}
+.exam-card h5{font-size:16.5px;font-weight:500;line-height:1.35}
+.exam-card .meta{display:flex;gap:14px;color:var(--muted);font-size:13px}
+.exam-card .meta span{display:flex;align-items:center;gap:4px}
+.exam-card .meta svg.i{width:15px;height:15px}
+.exam-card .actions{display:flex;gap:8px;margin-top:4px}
+.exam-card .actions .btn{flex:1}
+.steps{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+.steps .s{display:flex;align-items:center;gap:8px}
+.steps .s i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:600;background:#EFEEE7}
+.steps .s.done i{background:var(--green);color:#fff}
+.steps .s.on{color:var(--text);font-weight:500}.steps .s.on i{background:var(--orange);color:#fff}
+.steps hr{width:40px;border:0;border-top:2px dashed #DCDAD0}
+.chips{display:flex;gap:10px}
+.chips .pill{font-size:14px;padding:6px 14px}
+.foot-actions{display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+.foot-actions p{color:var(--muted);font-size:13.5px;display:flex;align-items:center;gap:6px}
+.foot-actions div{display:flex;gap:10px}
+.foot-actions .btn{width:auto;padding:0 22px;height:44px}
+.empty-new{border:2px dashed #D9E6CB;background:transparent;box-shadow:none;display:grid;place-items:center;color:var(--green);text-align:center;gap:6px}
+</style>
+</head>
+<body>
+
+<!-- ===== icon sprite ===== -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></symbol>
+  <symbol id="clip" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4V3h6v1"/><path d="m9 12 2 2 4-4"/><path d="M9 17h6"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="5" y="11" width="3.5" height="6" rx="1"/><rect x="10.25" y="6" width="3.5" height="11" rx="1"/><rect x="15.5" y="9" width="3.5" height="8" rx="1"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+  <symbol id="download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></symbol>
+  <symbol id="upload" viewBox="0 0 24 24"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+  <symbol id="logout" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H4"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.2.6 3.5 2.8 3.5 6"/></symbol>
+  <symbol id="star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></symbol>
+  <symbol id="edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="leaf" viewBox="0 0 60 60"><path d="M6 54C6 26 24 8 56 6c0 30-18 48-50 48Z" fill="#8FC06B" stroke="none"/><path d="M8 52 44 18" stroke="#5E9A3D" stroke-width="2.5" fill="none"/></symbol>
+</svg>
+
+<!-- ===== intro ===== -->
+<header class="intro">
+  <img class="icon" src="../assets/mascot/icon.png" alt="ไอคอน Quizzy">
+  <div>
+    <div class="logo">Quiz<span>zy</span></div>
+    <div class="tagline">สนุกกับการสอบ เก่งขึ้นทุกวัน! กับน้องแต่ว</div>
+    <p>Mockup หน้าจอ Quizzy Lite: LINE Mini App สำหรับนักเรียน และหน้าจัดการสำหรับครู ฟอนต์ Kanit · ธีมใบเตย × ชาไทย</p>
+    <div class="swatches">
+      <i style="background:#4F8B32" title="#4F8B32"></i><i style="background:#76A957" title="#76A957"></i>
+      <i style="background:#F59A38" title="#F59A38"></i><i style="background:#FFF3D9" title="#FFF3D9"></i>
+      <i style="background:#6D5037" title="#6D5037"></i>
+    </div>
+  </div>
+</header>
+
+<!-- =================== STUDENT =================== -->
+<h2 class="section-title">นักเรียน: LINE Mini App <small>เปิดผ่าน LINE บนมือถือ</small></h2>
+<div class="row">
+
+  <!-- 1 welcome -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="hero">
+        <svg class="leaf" style="left:-8px;top:60px;transform:rotate(-20deg)"><use href="#leaf"/></svg>
+        <svg class="leaf" style="right:-10px;top:120px;transform:scaleX(-1) rotate(-10deg);width:46px"><use href="#leaf"/></svg>
+        <div class="logo-s">Quiz<span>zy</span></div>
+        <div class="tag">สนุกกับการสอบ เก่งขึ้นทุกวัน!</div>
+        <div class="bubble bl" style="left:14px;top:112px;z-index:3">สวัสดีครับ<br>น้องแต่วมาแล้ว!</div>
+        <img class="m" src="../assets/mascot/happy.png" alt="">
+      </div>
+      <div class="body" style="padding-top:18px;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:34px;height:34px;font-size:14px">ภ</div>
+          <div style="font-size:13.5px;color:var(--muted)">เข้าสู่ระบบด้วย LINE แล้ว<br><b style="color:var(--text);font-weight:500">Phum 🌱</b></div>
+        </div>
+        <div class="input"><label>ชื่อ-นามสกุล</label><div class="focus">ด.ช.ภูมิ ใจดี</div></div>
+        <div class="input"><label>รหัสนักเรียน</label><div>65012</div></div>
+        <button class="btn btn-primary" style="margin-top:4px">เริ่มเลย</button>
+      </div>
+    </div></div>
+    <div class="caption"><b>1 · ต้อนรับ + ลงทะเบียน</b>ครั้งแรกที่เปิดแอปเท่านั้น</div>
+  </div>
+
+  <!-- 2 home -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="body">
+        <div style="display:flex;align-items:center;gap:10px;padding-top:4px">
+          <div class="avatar">ภ</div>
+          <div><div style="font-size:13px;color:var(--muted)">สวัสดีครับ</div><div style="font-weight:600;font-size:17px">ภูมิ ใจดี</div></div>
+        </div>
+        <div class="card" style="background:linear-gradient(120deg,#4F8B32,#76A957);color:#fff;position:relative;overflow:hidden;padding:16px;min-height:120px">
+          <div style="font-size:18px;font-weight:600;line-height:1.3;max-width:160px">มีข้อสอบรอคุณ<br>อยู่ 2 ชุด</div>
+          <div style="font-size:13px;opacity:.9;margin-top:4px">ปิดรับชุดแรก 20 พ.ย.</div>
+          <img src="../assets/mascot/wink.png" style="position:absolute;right:-6px;bottom:-4px;width:118px" alt="">
+        </div>
+        <div class="sec"><h4>ข้อสอบที่เปิดอยู่</h4><a href="#">ทั้งหมด ›</a></div>
+        <div class="card list-row">
+          <div class="tile"><svg class="i"><use href="#clip"/></svg></div>
+          <div class="t"><b>บทที่ 3 เศษส่วน</b><small>10 ข้อ · 15 นาที</small></div>
+          <button class="btn btn-primary btn-sm">เริ่มสอบ</button>
+        </div>
+        <div class="card list-row">
+          <div class="tile"><svg class="i"><use href="#clip"/></svg></div>
+          <div class="t"><b>วิทย์ ป.5 หน่วยที่ 2</b><small>20 ข้อ · 30 นาที</small></div>
+          <button class="btn btn-primary btn-sm">เริ่มสอบ</button>
+        </div>
+        <div class="card list-row">
+          <div class="tile g"><svg class="i"><use href="#check"/></svg></div>
+          <div class="t"><b>English Unit 1</b><small>ส่งแล้ว 12 พ.ย.</small></div>
+          <button class="btn btn-green btn-sm">ได้ 8/10</button>
+        </div>
+      </div>
+      <nav class="tabbar">
+        <a class="on"><svg class="i"><use href="#home"/></svg>หน้าแรก</a>
+        <a><svg class="i"><use href="#chart"/></svg>ผลสอบของฉัน</a>
+        <a><svg class="i"><use href="#user"/></svg>โปรไฟล์</a>
+      </nav>
+    </div></div>
+    <div class="caption"><b>2 · หน้าแรก</b>รายการชุดสอบที่เปิดอยู่ และสถานะว่าสอบแล้วหรือยัง</div>
+  </div>
+
+  <!-- 3 instructions -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="appbar"><span class="btn-icon"><svg class="i"><use href="#back"/></svg></span><h3>คำชี้แจง</h3><span class="btn-icon"><svg class="i"><use href="#close"/></svg></span></div>
+      <div class="body" style="padding-top:0">
+        <div class="card" style="padding:18px">
+          <span class="pill orange">คณิตศาสตร์ ป.5</span>
+          <div style="font-size:20px;font-weight:600;margin:8px 0 2px">บทที่ 3 เศษส่วน</div>
+          <div style="color:var(--muted);font-size:13.5px">ครูสมศรี · ปิดรับ 20 พ.ย. 16:00</div>
+          <div class="mini-stats" style="margin-top:14px">
+            <div><b>10</b>ข้อ</div><div><b>15</b>นาที</div><div><b>10</b>คะแนนเต็ม</div>
+          </div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;gap:12px;font-size:14.5px">
+          <div class="list-row"><div class="tile g" style="width:32px;height:32px;border-radius:10px"><svg class="i" style="width:16px"><use href="#check"/></svg></div>สอบได้ครั้งเดียว</div>
+          <div class="list-row"><div class="tile g" style="width:32px;height:32px;border-radius:10px"><svg class="i" style="width:16px"><use href="#clock"/></svg></div>เวลาเริ่มนับทันทีที่กดเริ่ม</div>
+          <div class="list-row"><div class="tile g" style="width:32px;height:32px;border-radius:10px"><svg class="i" style="width:16px"><use href="#upload"/></svg></div>หมดเวลา ระบบส่งคำตอบให้เอง</div>
+          <div class="list-row"><div class="tile g" style="width:32px;height:32px;border-radius:10px"><svg class="i" style="width:16px"><use href="#info"/></svg></div>หลุดออกจากแอป กลับมาทำต่อได้</div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:auto">เริ่มทำข้อสอบ</button>
+      </div>
+    </div></div>
+    <div class="caption"><b>3 · คำชี้แจงก่อนสอบ</b>บอกกติกาให้ชัดก่อนกดเริ่ม</div>
+  </div>
+
+  <!-- 4 exam -->
+  <div class="frame">
+    <div class="phone"><div class="screen" id="exam">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="body" style="padding-top:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:600">ข้อ 4 <span style="color:var(--muted);font-weight:400">/ 10</span></div>
+          <span class="timer"><svg class="i" style="width:17px"><use href="#clock"/></svg>08:42</span>
+        </div>
+        <div class="progress"><i style="width:40%"></i></div>
+        <div class="card" style="padding:18px">
+          <span class="q-num">ข้อ 4 · 1 คะแนน</span>
+          <div style="font-size:18px;font-weight:500;margin-top:10px;line-height:1.5">ข้อใดมีค่าเท่ากับ <b style="color:var(--green)">3/4</b></div>
+        </div>
+        <div class="opt sel" onclick="pick(this)"><span class="k">ก</span>6/8</div>
+        <div class="opt" onclick="pick(this)"><span class="k">ข</span>3/8</div>
+        <div class="opt" onclick="pick(this)"><span class="k">ค</span>9/16</div>
+        <div class="opt" onclick="pick(this)"><span class="k">ง</span>4/3</div>
+        <div class="saved"><svg class="i" style="width:14px"><use href="#check"/></svg>บันทึกคำตอบในเครื่องแล้ว</div>
+      </div>
+      <div class="exam-foot">
+        <span class="grid-btn"><svg class="i"><use href="#grid"/></svg></span>
+        <button class="btn btn-secondary">ก่อนหน้า</button>
+        <button class="btn btn-primary">ถัดไป</button>
+      </div>
+    </div></div>
+    <div class="caption"><b>4 · ทำข้อสอบ</b>เรียบที่สุด ไม่มีมาสคอตกวนสมาธิ (ลองกดเลือกตัวเลือกได้)</div>
+  </div>
+
+  <!-- 5 confirm -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="body" style="padding-top:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:600">ข้อ 10 <span style="color:var(--muted);font-weight:400">/ 10</span></div>
+          <span class="timer warn"><svg class="i" style="width:17px"><use href="#clock"/></svg>00:48</span>
+        </div>
+        <div class="progress"><i style="width:100%"></i></div>
+        <div class="card" style="height:110px"></div>
+        <div class="opt"><span class="k">ก</span>&nbsp;</div><div class="opt sel"><span class="k">ข</span>&nbsp;</div>
+      </div>
+      <div class="overlay">
+        <div class="sheet">
+          <img src="../assets/mascot/curious.png" alt="">
+          <div style="font-size:19px;font-weight:600;color:var(--brown)">ส่งคำตอบเลยไหมครับ?</div>
+          <div style="font-size:14px;color:var(--muted);margin-top:2px">ตอบแล้ว 9 จาก 10 ข้อ · ยังไม่ได้ตอบข้อ 7</div>
+          <div class="nums">
+            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            <span>6</span><span class="miss">7</span><span>8</span><span>9</span><span>10</span>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-secondary">กลับไปตรวจ</button>
+            <button class="btn btn-primary">ส่งคำตอบ</button>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><b>5 · ยืนยันก่อนส่ง</b>เตือนข้อที่ยังไม่ได้ตอบ ตัวจับเวลาเป็นสีส้มเมื่อเหลือไม่ถึง 1 นาที</div>
+  </div>
+
+  <!-- 6 result -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="sun">
+        <div class="bubble bl" style="left:20px;top:64px;z-index:3">เก่งมากเลยครับ!</div>
+        <img src="../assets/mascot/happy.png" alt="">
+      </div>
+      <div class="card score-card">
+        <div style="font-size:14px;color:var(--muted)">บทที่ 3 เศษส่วน</div>
+        <div class="score">8 <small>/ 10</small></div>
+        <span class="pill green" style="font-size:13.5px;padding:4px 12px;margin-top:6px"><svg class="i" style="width:15px"><use href="#check"/></svg>ผ่านเกณฑ์ · 80%</span>
+        <div class="mini-stats">
+          <div><b>11:20</b>ใช้เวลา</div><div><b>8</b>ตอบถูก</div><div><b>14 พ.ย.</b>ส่งเมื่อ</div>
+        </div>
+      </div>
+      <div class="body" style="justify-content:flex-end">
+        <button class="btn btn-primary">กลับหน้าแรก</button>
+      </div>
+    </div></div>
+    <div class="caption"><b>6 · ผลคะแนน</b>ท่าน้องแต่วเปลี่ยนตามคะแนน (80%+ ยิ้มกว้าง · ผ่าน ขยิบตา · ไม่ผ่าน "สู้ใหม่นะ!")</div>
+  </div>
+
+  <!-- 7 my results -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="appbar" style="justify-content:center"><h3>ผลสอบของฉัน</h3></div>
+      <div class="body" style="padding-top:0">
+        <div class="card" style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div style="font-size:13px;color:var(--muted)">คะแนนเฉลี่ย</div><div style="font-size:30px;font-weight:700;color:var(--brown);line-height:1.1">78%</div></div>
+            <div style="text-align:right;font-size:13px;color:var(--muted)">สอบแล้ว <b style="color:var(--text)">3</b> ชุด<br>ผ่าน <b style="color:var(--green)">2</b> ชุด</div>
+          </div>
+          <div class="progress" style="margin-top:10px"><i style="width:78%"></i></div>
+        </div>
+        <div class="card list-row">
+          <div class="tile g"><svg class="i"><use href="#star"/></svg></div>
+          <div class="t"><b>บทที่ 3 เศษส่วน</b><small>14 พ.ย. · 8/10</small></div>
+          <span class="pill green">80%</span>
+        </div>
+        <div class="card list-row">
+          <div class="tile g"><svg class="i"><use href="#star"/></svg></div>
+          <div class="t"><b>English Unit 1</b><small>12 พ.ย. · 8/10</small></div>
+          <span class="pill green">80%</span>
+        </div>
+        <div class="card list-row">
+          <div class="tile"><svg class="i"><use href="#clip"/></svg></div>
+          <div class="t"><b>บทที่ 2 ทศนิยม</b><small>5 พ.ย. · 15/20</small></div>
+          <span class="pill orange">75% · ไม่ผ่าน</span>
+        </div>
+      </div>
+      <nav class="tabbar">
+        <a><svg class="i"><use href="#home"/></svg>หน้าแรก</a>
+        <a class="on"><svg class="i"><use href="#chart"/></svg>ผลสอบของฉัน</a>
+        <a><svg class="i"><use href="#user"/></svg>โปรไฟล์</a>
+      </nav>
+    </div></div>
+    <div class="caption"><b>7 · ผลสอบของฉัน</b>ประวัติคะแนนทุกชุดที่ส่งแล้ว</div>
+  </div>
+
+  <!-- 8 profile -->
+  <div class="frame">
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span class="sig"><i></i></span></div>
+      <div class="appbar" style="justify-content:center"><h3>โปรไฟล์</h3></div>
+      <div class="body" style="padding-top:0">
+        <div class="card" style="text-align:center;padding:22px 16px">
+          <div class="avatar" style="width:76px;height:76px;font-size:30px;margin:0 auto">ภ</div>
+          <div style="font-size:19px;font-weight:600;margin-top:10px">ด.ช.ภูมิ ใจดี</div>
+          <div style="color:var(--muted);font-size:14px">รหัสนักเรียน 65012</div>
+        </div>
+        <div class="card" style="padding:4px 14px">
+          <div class="list-row" style="padding:12px 0;border-bottom:1px solid var(--line)"><span class="t" style="color:var(--muted)">ชื่อใน LINE</span><span>Phum 🌱</span></div>
+          <div class="list-row" style="padding:12px 0;border-bottom:1px solid var(--line)"><span class="t" style="color:var(--muted)">ลงทะเบียนเมื่อ</span><span>1 พ.ย. 2569</span></div>
+          <div class="list-row" style="padding:12px 0"><span class="t" style="color:var(--muted)">สอบแล้ว</span><span>3 ชุด</span></div>
+        </div>
+        <div style="font-size:12.5px;color:var(--muted);text-align:center;margin-top:auto">หากชื่อหรือรหัสไม่ถูกต้อง แจ้งครูประจำวิชาได้เลยครับ</div>
+      </div>
+      <nav class="tabbar">
+        <a><svg class="i"><use href="#home"/></svg>หน้าแรก</a>
+        <a><svg class="i"><use href="#chart"/></svg>ผลสอบของฉัน</a>
+        <a class="on"><svg class="i"><use href="#user"/></svg>โปรไฟล์</a>
+      </nav>
+    </div></div>
+    <div class="caption"><b>8 · โปรไฟล์</b>ดูข้อมูลได้อย่างเดียว แก้ไขผ่านครู</div>
+  </div>
+</div>
+
+<!-- ===== states ===== -->
+<h2 class="section-title">สถานะต่าง ๆ <small>น้องแต่วช่วยบอกว่าเกิดอะไรขึ้น</small></h2>
+<div class="row">
+  <div class="state"><img class="bounce" src="../assets/mascot/front.png" alt=""><b>กำลังโหลด</b><div class="dots"><i></i><i></i><i></i></div></div>
+  <div class="state"><img src="../assets/mascot/sleep.png" alt=""><b>ยังไม่มีข้อสอบตอนนี้</b><p>พักผ่อนก่อนนะครับ เดี๋ยวครูเปิดสอบจะมาแจ้ง</p></div>
+  <div class="state"><img src="../assets/mascot/surprised.png" alt=""><b>เชื่อมต่อไม่สำเร็จ</b><p>ตรวจอินเทอร์เน็ตแล้วลองใหม่นะครับ</p><button class="btn btn-secondary btn-sm" style="margin-top:4px">ลองอีกครั้ง</button></div>
+  <div class="state"><img src="../assets/mascot/love.png" alt=""><b>ส่งคำตอบเรียบร้อย!</b><p>ขอบคุณที่ตั้งใจทำนะครับ</p></div>
+  <div class="state"><img src="../assets/mascot/curious.png" alt=""><b>สู้ใหม่นะ!</b><p>ผลสอบยังไม่ผ่านเกณฑ์ ลองทบทวนบทเรียนอีกครั้งนะครับ</p></div>
+</div>
+
+<!-- =================== TEACHER =================== -->
+<h2 class="section-title">ครู: หน้าจัดการ <small>teacher.html · ใช้บนคอมพิวเตอร์</small></h2>
+<div class="row" style="flex-direction:column;gap:40px">
+
+  <!-- T1 exam list -->
+  <div class="frame" style="align-items:stretch">
+    <div class="desk">
+      <div class="chrome"><i></i><i></i><i></i><span class="url">quizzy-lite.vercel.app/teacher.html</span></div>
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><img src="../assets/mascot/icon.png" alt=""><b>Quiz<span>zy</span></b></div>
+          <a class="nav on"><svg class="i"><use href="#clip"/></svg>ชุดสอบ</a>
+          <a class="nav"><svg class="i"><use href="#chart"/></svg>ผลสอบ</a>
+          <a class="nav"><svg class="i"><use href="#upload"/></svg>นำเข้า Excel</a>
+          <div class="me"><div class="avatar" style="width:36px;height:36px;font-size:14px">ส</div><div>ครูสมศรี<small>ครู</small></div><svg class="i" style="margin-left:auto;color:var(--muted)"><use href="#logout"/></svg></div>
+        </aside>
+        <main class="main">
+          <div class="main-head">
+            <div><h2>ชุดสอบของฉัน</h2><p>4 ชุด · เผยแพร่อยู่ 2 ชุด</p></div>
+            <div class="head-actions"><button class="btn btn-secondary"><svg class="i"><use href="#upload"/></svg>นำเข้าจาก Excel</button><button class="btn btn-primary"><svg class="i"><use href="#plus"/></svg>สร้างชุดสอบ</button></div>
+          </div>
+          <div class="exam-grid">
+            <div class="card exam-card">
+              <div style="display:flex;justify-content:space-between"><span class="pill green">● เผยแพร่แล้ว</span><span class="pill gray">ส่งแล้ว 32/35</span></div>
+              <h5>บทที่ 3 เศษส่วน</h5>
+              <div class="meta"><span><svg class="i"><use href="#list"/></svg>10 ข้อ</span><span><svg class="i"><use href="#clock"/></svg>15 นาที</span><span>ปิด 20 พ.ย.</span></div>
+              <div class="progress"><i style="width:91%"></i></div>
+              <div class="actions"><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#chart"/></svg>ดูผล</button><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#edit"/></svg>แก้ไข</button></div>
+            </div>
+            <div class="card exam-card">
+              <div style="display:flex;justify-content:space-between"><span class="pill green">● เผยแพร่แล้ว</span><span class="pill gray">ส่งแล้ว 4/35</span></div>
+              <h5>วิทย์ ป.5 หน่วยที่ 2 สิ่งมีชีวิต</h5>
+              <div class="meta"><span><svg class="i"><use href="#list"/></svg>20 ข้อ</span><span><svg class="i"><use href="#clock"/></svg>30 นาที</span><span>ปิด 25 พ.ย.</span></div>
+              <div class="progress"><i style="width:11%"></i></div>
+              <div class="actions"><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#chart"/></svg>ดูผล</button><button class="btn btn-secondary btn-sm" disabled style="opacity:.5" title="มีนักเรียนเริ่มสอบแล้ว"><svg class="i"><use href="#edit"/></svg>แก้ไขไม่ได้</button></div>
+            </div>
+            <div class="card exam-card">
+              <div style="display:flex;justify-content:space-between"><span class="pill orange">ฉบับร่าง</span></div>
+              <h5>บทที่ 4 การบวกลบเศษส่วน</h5>
+              <div class="meta"><span><svg class="i"><use href="#list"/></svg>6 ข้อ</span><span><svg class="i"><use href="#clock"/></svg>20 นาที</span><span>ยังไม่ตั้งเวลา</span></div>
+              <div style="font-size:13px;color:var(--muted)">ยังไม่เผยแพร่ นักเรียนยังไม่เห็น</div>
+              <div class="actions"><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#edit"/></svg>แก้ไข</button><button class="btn btn-primary btn-sm">เผยแพร่</button></div>
+            </div>
+            <div class="card exam-card">
+              <div style="display:flex;justify-content:space-between"><span class="pill gray">ปิดแล้ว</span><span class="pill gray">ส่งแล้ว 34/35</span></div>
+              <h5>English Unit 1 Vocabulary</h5>
+              <div class="meta"><span><svg class="i"><use href="#list"/></svg>10 ข้อ</span><span><svg class="i"><use href="#clock"/></svg>10 นาที</span><span>ปิด 12 พ.ย.</span></div>
+              <div class="progress"><i style="width:97%;background:var(--green2)"></i></div>
+              <div class="actions"><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#chart"/></svg>ดูผล</button><button class="btn btn-secondary btn-sm"><svg class="i"><use href="#download"/></svg>Excel</button></div>
+            </div>
+            <div class="card exam-card empty-new">
+              <div><svg class="i" style="width:30px;height:30px"><use href="#plus"/></svg><div style="font-weight:500">สร้างชุดสอบใหม่</div></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="caption" style="max-width:none"><b>T1 · ชุดสอบของฉัน</b>เห็นสถานะ (ร่าง / เผยแพร่ / ปิด) และจำนวนคนส่ง ปุ่มแก้ไขถูกล็อกเมื่อมีนักเรียนเริ่มสอบแล้ว</div>
+  </div>
+
+  <!-- T2 results -->
+  <div class="frame" style="align-items:stretch">
+    <div class="desk">
+      <div class="chrome"><i></i><i></i><i></i><span class="url">quizzy-lite.vercel.app/teacher.html#results</span></div>
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><img src="../assets/mascot/icon.png" alt=""><b>Quiz<span>zy</span></b></div>
+          <a class="nav"><svg class="i"><use href="#clip"/></svg>ชุดสอบ</a>
+          <a class="nav on"><svg class="i"><use href="#chart"/></svg>ผลสอบ</a>
+          <a class="nav"><svg class="i"><use href="#upload"/></svg>นำเข้า Excel</a>
+          <div class="me"><div class="avatar" style="width:36px;height:36px;font-size:14px">ส</div><div>ครูสมศรี<small>ครู</small></div><svg class="i" style="margin-left:auto;color:var(--muted)"><use href="#logout"/></svg></div>
+        </aside>
+        <main class="main">
+          <div class="main-head">
+            <div><h2>ผลสอบ: บทที่ 3 เศษส่วน</h2><p>เปิด 14–20 พ.ย. · 10 ข้อ · เกณฑ์ผ่าน 50%</p></div>
+            <div class="head-actions"><button class="btn btn-secondary"><svg class="i"><use href="#download"/></svg>Export Excel</button></div>
+          </div>
+          <div class="stats">
+            <div class="card stat"><div class="tile g"><svg class="i"><use href="#users"/></svg></div><div><b>32<span style="font-size:16px;color:var(--muted)">/35</span></b><small>ส่งแล้ว</small></div></div>
+            <div class="card stat"><div class="tile"><svg class="i"><use href="#chart"/></svg></div><div><b>7.4</b><small>คะแนนเฉลี่ย</small></div></div>
+            <div class="card stat"><div class="tile g"><svg class="i"><use href="#star"/></svg></div><div><b>10</b><small>สูงสุด</small></div></div>
+            <div class="card stat"><div class="tile"><svg class="i"><use href="#info"/></svg></div><div><b>3</b><small>ต่ำสุด</small></div></div>
+          </div>
+          <div class="cols">
+            <div class="card" style="padding:8px 8px 4px">
+              <table>
+                <tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>คะแนน</th><th>ส่งเมื่อ</th><th>สถานะ</th></tr>
+                <tr><td>65001</td><td>ด.ญ.กานดา มีสุข</td><td><b>10</b> / 10</td><td>14 พ.ย. 09:12</td><td><span class="pill green">ผ่าน</span></td></tr>
+                <tr><td>65012</td><td>ด.ช.ภูมิ ใจดี</td><td><b>8</b> / 10</td><td>14 พ.ย. 10:32</td><td><span class="pill green">ผ่าน</span></td></tr>
+                <tr><td>65007</td><td>ด.ญ.ปิยะดา ศรีทอง</td><td><b>7</b> / 10</td><td>15 พ.ย. 19:04</td><td><span class="pill green">ผ่าน</span></td></tr>
+                <tr><td>65020</td><td>ด.ช.ธนกร แก้วดี</td><td><b>6</b> / 10</td><td>15 พ.ย. 20:41</td><td><span class="pill green">ผ่าน</span> <span class="pill orange">ส่งช้า</span></td></tr>
+                <tr><td>65015</td><td>ด.ช.ณัฐวุฒิ บุญมา</td><td><b>3</b> / 10</td><td>16 พ.ย. 08:15</td><td><span class="pill red">ไม่ผ่าน</span></td></tr>
+                <tr><td>65031</td><td>ด.ญ.พิมพ์ชนก รุ่งเรือง</td><td style="color:var(--muted)">–</td><td style="color:var(--muted)">ยังไม่ส่ง</td><td><span class="pill gray">รอ</span></td></tr>
+              </table>
+            </div>
+            <div class="card" style="padding:18px">
+              <div style="font-weight:600;margin-bottom:4px">ข้อที่ตอบผิดมากที่สุด</div>
+              <div style="font-size:13px;color:var(--muted);margin-bottom:14px">ใช้ดูว่าเรื่องไหนควรสอนซ้ำ</div>
+              <div class="bar-row"><div class="top">ข้อ 7: 2/3 + 1/6 = ?<span>ผิด 68%</span></div><div class="progress"><i style="width:68%"></i></div></div>
+              <div class="bar-row"><div class="top">ข้อ 9: เรียงจากน้อยไปมาก<span>ผิด 52%</span></div><div class="progress"><i style="width:52%"></i></div></div>
+              <div class="bar-row"><div class="top">ข้อ 4: ข้อใดเท่ากับ 3/4<span>ผิด 31%</span></div><div class="progress"><i style="width:31%"></i></div></div>
+              <div class="bar-row"><div class="top">ข้อ 2: ทำเป็นเศษส่วนอย่างต่ำ<span>ผิด 25%</span></div><div class="progress"><i style="width:25%"></i></div></div>
+              <div class="bar-row" style="margin:0"><div class="top">ข้อ 5: เศษเกินเป็นจำนวนคละ<span>ผิด 19%</span></div><div class="progress"><i style="width:19%"></i></div></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="caption" style="max-width:none"><b>T2 · ผลสอบ</b>ตัวเลขสรุป + ตารางรายคน + ข้อที่ตอบผิดมากที่สุด Export Excel ได้ในคลิกเดียว (ไม่มีกราฟ ตามสโคป Lite)</div>
+  </div>
+
+  <!-- T3 import -->
+  <div class="frame" style="align-items:stretch">
+    <div class="desk">
+      <div class="chrome"><i></i><i></i><i></i><span class="url">quizzy-lite.vercel.app/teacher.html#import</span></div>
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><img src="../assets/mascot/icon.png" alt=""><b>Quiz<span>zy</span></b></div>
+          <a class="nav"><svg class="i"><use href="#clip"/></svg>ชุดสอบ</a>
+          <a class="nav"><svg class="i"><use href="#chart"/></svg>ผลสอบ</a>
+          <a class="nav on"><svg class="i"><use href="#upload"/></svg>นำเข้า Excel</a>
+          <div class="me"><div class="avatar" style="width:36px;height:36px;font-size:14px">ส</div><div>ครูสมศรี<small>ครู</small></div><svg class="i" style="margin-left:auto;color:var(--muted)"><use href="#logout"/></svg></div>
+        </aside>
+        <main class="main">
+          <div class="main-head">
+            <div><h2>นำเข้าข้อสอบจาก Excel</h2><p>ไปยังชุดสอบ: <b style="color:var(--text);font-weight:500">บทที่ 4 การบวกลบเศษส่วน</b></p></div>
+            <div class="head-actions"><button class="btn btn-secondary"><svg class="i"><use href="#download"/></svg>ดาวน์โหลด Template</button></div>
+          </div>
+          <div class="steps">
+            <div class="s done"><i>✓</i>อัปโหลดไฟล์</div><hr>
+            <div class="s on"><i>2</i>ตรวจสอบข้อมูล</div><hr>
+            <div class="s"><i>3</i>ยืนยันนำเข้า</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="list-row"><div class="tile g"><svg class="i"><use href="#file"/></svg></div><div class="t"><b>ข้อสอบเศษส่วน-บท4.xlsx</b><small>20 แถว · อ่านเมื่อสักครู่</small></div></div>
+            <div class="chips"><span class="pill green">ถูกต้อง 18 แถว</span><span class="pill red">ต้องแก้ 2 แถว</span></div>
+          </div>
+          <div class="card" style="padding:8px 8px 4px">
+            <table>
+              <tr><th>แถว</th><th>question_text</th><th>A</th><th>B</th><th>C</th><th>D</th><th>เฉลย</th><th>คะแนน</th><th>ผลตรวจ</th></tr>
+              <tr><td>2</td><td>1/2 + 1/4 = ?</td><td>3/4</td><td>2/6</td><td>1/6</td><td>2/4</td><td>A</td><td>1</td><td><span class="pill green">✓ ถูกต้อง</span></td></tr>
+              <tr><td>3</td><td>3/5 − 1/5 = ?</td><td>2/5</td><td>2/0</td><td>4/5</td><td>1/5</td><td>A</td><td>1</td><td><span class="pill green">✓ ถูกต้อง</span></td></tr>
+              <tr class="err"><td>4</td><td>2/3 + 1/6 = ?</td><td>5/6</td><td>3/9</td><td>1/2</td><td>4/6</td><td><b>E</b></td><td>1</td><td class="why">เฉลยต้องเป็น A–D</td></tr>
+              <tr><td>5</td><td>เศษส่วนใดมากที่สุด</td><td>1/2</td><td>2/3</td><td>3/4</td><td>3/5</td><td>C</td><td>1</td><td><span class="pill green">✓ ถูกต้อง</span></td></tr>
+              <tr class="err"><td>6</td><td>5/8 − 1/4 = ?</td><td>3/8</td><td style="color:var(--red)">(ว่าง)</td><td></td><td></td><td>A</td><td>1</td><td class="why">ต้องมีอย่างน้อย 2 ตัวเลือก</td></tr>
+              <tr><td>7</td><td>1 − 2/7 = ?</td><td>5/7</td><td>1/7</td><td>2/7</td><td>3/7</td><td>A</td><td>2</td><td><span class="pill green">✓ ถูกต้อง</span></td></tr>
+            </table>
+          </div>
+          <div class="foot-actions">
+            <p><svg class="i" style="width:16px"><use href="#info"/></svg>แถวที่ต้องแก้จะไม่ถูกนำเข้า แก้ในไฟล์แล้วอัปโหลดใหม่ได้</p>
+            <div><button class="btn btn-secondary">ยกเลิก</button><button class="btn btn-primary">นำเข้า 18 ข้อ</button></div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="caption" style="max-width:none"><b>T3 · นำเข้าจาก Excel</b>อ่านไฟล์ → แสดงตัวอย่างพร้อมไฮไลต์แถวที่ผิดและเหตุผล → ครูกดยืนยันจึงบันทึก</div>
+  </div>
+</div>
+
+<script>
+function pick(el){
+  el.parentElement.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+}
+</script>
+</body>
+</html>
