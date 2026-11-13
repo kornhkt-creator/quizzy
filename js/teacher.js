@@ -2,39 +2,123 @@
 // หน้าครู (teacher.html)
 // =========================================================
 import { IS_DEMO } from './config.js';
-import { initLine } from './line.js';
-import { api, resetDemo } from './api.js';
+import { initLine, lineLogin, lineLogout } from './line.js';
+import { api, resetDemo, useAuth, authProvider } from './api.js';
+import { emailLoginEnabled, getSession, signIn, signOut, getAccessToken, clearSession } from './email-auth.js';
 import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate } from './ui.js';
 import { icon } from './icons.js';
 
 const app = document.getElementById('app');
 const state = { me: null, view: 'exams', exam: null, dirty: false };
 
+// ใช้ token ของ Supabase Auth แทน LINE (ครูที่ login ด้วยอีเมล)
+const EMAIL_AUTH = {
+  provider: 'email',
+  getToken: getAccessToken,
+  onExpired: () => { clearSession(); location.reload(); },
+};
+
+// ---------- เริ่มต้น: เลือกวิธีเข้าสู่ระบบ ----------
+// โหมดทดลอง → เข้าเป็นครูทดลองทันที
+// มี session อีเมลอยู่แล้ว → ใช้ต่อ
+// login LINE อยู่แล้ว → ใช้ LINE
+// ยังไม่ได้ login → แสดงหน้าเข้าสู่ระบบ
 async function start() {
   app.innerHTML = `<div class="page">${loadingHtml('กำลังเข้าสู่ระบบ')}</div>`;
-  try {
+  if (IS_DEMO) {
     await initLine('ครูทดลอง');
+    return enter();
+  }
+  if (emailLoginEnabled() && getSession()) {
+    useAuth(EMAIL_AUTH);
+    return enter();
+  }
+  let lineReady = false;
+  try {
+    const profile = await initLine('', { autoLogin: false });
+    lineReady = true;
+    if (profile) return enter();
+  } catch (err) {
+    console.warn('LIFF ใช้งานไม่ได้', err); // ยัง login ด้วยอีเมลได้
+  }
+  renderLogin(lineReady);
+}
+
+async function enter() {
+  app.innerHTML = `<div class="page">${loadingHtml('กำลังเข้าสู่ระบบ')}</div>`;
+  try {
     state.me = await api('me');
     if (state.me.role !== 'teacher') return renderNotTeacher();
     if (!state.me.registered) return renderRegister();
     go('exams');
   } catch (err) {
     console.error(err);
+    if (authProvider() === 'email' && !getSession()) return renderLogin(false, err.message);
     app.innerHTML = `<div class="page">${stateHtml({
       img: 'surprised', title: 'เชื่อมต่อไม่สำเร็จ', text: err.message,
-      button: '<button class="btn btn-secondary btn-sm" data-act="reload">ลองอีกครั้ง</button>',
+      button: '<div style="display:flex;gap:10px"><button class="btn btn-secondary btn-sm" data-act="logout">ออกจากระบบ</button><button class="btn btn-primary btn-sm" data-act="reload">ลองอีกครั้ง</button></div>',
     })}</div>`;
   }
 }
 
+// ---------- หน้าเข้าสู่ระบบ ----------
+function renderLogin(lineReady, message = '') {
+  const email = emailLoginEnabled();
+  const or = '<div class="center muted" style="font-size:13px;display:flex;align-items:center;gap:10px"><hr style="flex:1;border:0;border-top:1px solid var(--line)">หรือ<hr style="flex:1;border:0;border-top:1px solid var(--line)"></div>';
+  app.innerHTML = `
+    <div class="page" style="max-width:440px">
+      <form class="body" id="login" style="padding-top:36px" novalidate>
+        <div class="center"><img src="${mascot('happy')}" alt="" style="height:130px"></div>
+        <h1 class="center" style="font-size:22px;color:var(--brown)">เข้าสู่ระบบสำหรับครู</h1>
+        <p class="center muted" style="font-size:14px;margin-top:-6px">Quizzy · สนุกกับการสอบ เก่งขึ้นทุกวัน!</p>
+        ${email ? `
+          <label class="field"><span>อีเมล</span><input name="email" type="email" autocomplete="username" placeholder="kru@school.ac.th" required></label>
+          <label class="field"><span>รหัสผ่าน</span><input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="btn btn-primary" type="submit">เข้าสู่ระบบ</button>
+          ${or}` : ''}
+        <button class="btn btn-secondary" type="button" data-act="line-login" ${lineReady ? '' : 'disabled'}>เข้าสู่ระบบด้วย LINE</button>
+        ${lineReady ? '' : '<p class="center muted" style="font-size:12.5px">ตอนนี้ login ด้วย LINE ไม่ได้ (ตรวจ LIFF ID ใน js/config.js)</p>'}
+        ${email ? '<p class="center muted" style="font-size:12.5px">บัญชีอีเมลของครูสร้างโดยผู้ดูแลระบบใน Supabase</p>' : ''}
+      </form>
+    </div>`;
+  if (message) toast(message, 'error');
+
+  const form = app.querySelector('#login');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!email) return;
+    if (!form.email.value.trim() || !form.password.value) return toast('กรุณากรอกอีเมลและรหัสผ่าน', 'error');
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'กำลังเข้าสู่ระบบ…';
+    try {
+      await signIn(form.email.value, form.password.value);
+      useAuth(EMAIL_AUTH);
+      enter();
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'เข้าสู่ระบบ';
+    }
+  });
+}
+
+async function logout() {
+  if (IS_DEMO) return;
+  if (authProvider() === 'email') await signOut();
+  else lineLogout();
+  location.reload();
+}
+
 // ---------- ยังไม่ใช่ครู: บอกวิธีตั้งสิทธิ์ ----------
 function renderNotTeacher() {
+  const who = authProvider() === 'email' ? 'อีเมล' : 'LINE';
   app.innerHTML = `
     <div class="page" style="max-width:560px">
       <div class="body" style="padding-top:32px">
         <div class="center"><img src="${mascot('curious')}" alt="" style="height:110px"></div>
         <h1 class="center" style="font-size:21px;color:var(--brown)">หน้านี้สำหรับครูเท่านั้น</h1>
-        <p class="center muted">บัญชี LINE <b style="color:var(--text)">${esc(state.me.display_name || '')}</b> ยังเป็นสิทธิ์นักเรียน</p>
+        <p class="center muted">บัญชี${who} <b style="color:var(--text)">${esc(state.me.display_name || '')}</b> ยังเป็นสิทธิ์นักเรียน</p>
         <div class="card" style="font-size:14.5px;display:flex;flex-direction:column;gap:8px">
           <b>วิธีตั้งเป็นครู (ทำครั้งเดียว)</b>
           <div>1. เปิด Supabase → <b>Table Editor</b> → ตาราง <b>profiles</b></div>
@@ -43,6 +127,7 @@ function renderNotTeacher() {
           <div>4. กลับมากดปุ่มด้านล่าง</div>
         </div>
         <button class="btn btn-primary" data-act="reload">ตั้งค่าแล้ว โหลดใหม่</button>
+        <button class="btn btn-secondary" data-act="logout">เข้าด้วยบัญชีอื่น</button>
       </div>
     </div>`;
 }
@@ -88,7 +173,8 @@ function shell(content) {
         <div class="brand"><img src="${mascot('icon')}" alt=""><b>Quiz<span>zy</span></b></div>
         ${nav}
         ${IS_DEMO ? `<button class="nav" data-act="reset-demo" style="margin-top:8px">${icon('trash')}ล้างข้อมูลทดลอง</button>` : ''}
-        <div class="me">${avatarHtml(state.me)}<div>${esc(state.me.full_name)}<small>ครู</small></div></div>
+        <div class="me">${avatarHtml(state.me)}<div style="min-width:0;flex:1">${esc(state.me.full_name)}<small style="overflow:hidden;text-overflow:ellipsis">${authProvider() === 'email' && !IS_DEMO ? esc(state.me.display_name || '') : 'ครู'}</small></div>
+          ${IS_DEMO ? '' : `<button class="btn-icon" data-act="logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">${icon('logout')}</button>`}</div>
       </aside>
       <main class="main" id="main">${content}</main>
     </div>`;
@@ -551,6 +637,12 @@ app.addEventListener('click', async (e) => {
   const ex = state.exam;
   switch (act) {
     case 'reload': return location.reload();
+    case 'line-login': return lineLogin();
+    case 'logout': {
+      if (state.dirty && !(await confirmBox({ title: 'ยังไม่ได้บันทึก', text: 'ออกจากระบบแล้วสิ่งที่แก้ไว้จะหายไป', ok: 'ออกจากระบบ', cancel: 'อยู่ต่อ', center: true }))) return;
+      state.dirty = false;
+      return logout();
+    }
     case 'reset-demo': {
       const ok = await confirmBox({ img: 'surprised', title: 'ล้างข้อมูลทดลองทั้งหมด?', text: 'ข้อมูลจำลองในเครื่องนี้จะกลับเป็นค่าเริ่มต้น', ok: 'ล้างข้อมูล', danger: true, center: true });
       if (ok) { state.dirty = false; await resetDemo(); location.reload(); }

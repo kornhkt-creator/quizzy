@@ -2,9 +2,12 @@
 // Quizzy Lite: Edge Function "api" (ตัวเดียวทั้งระบบ)
 //
 // ขั้นตอนทุกคำขอ:
-// 1) รับ { action, idToken, data } จากหน้าเว็บ
-// 2) ตรวจ LINE ID token กับ LINE ว่าเป็นของจริงและยังไม่หมดอายุ
-// 3) เรียกฟังก์ชัน api_* ในฐานข้อมูลด้วย service role พร้อม line_user_id ที่ยืนยันแล้ว
+// 1) รับ { action, provider, idToken, data } จากหน้าเว็บ
+// 2) ตรวจตัวตน:
+//    - provider "line"  (ค่าเริ่มต้น): ตรวจ LINE ID token กับ LINE
+//    - provider "email" (ครูที่ login ด้วยอีเมลบนคอมพิวเตอร์): ตรวจ access token กับ Supabase Auth
+// 3) เรียกฟังก์ชัน api_* ในฐานข้อมูลด้วย service role พร้อมรหัสผู้ใช้ที่ยืนยันแล้ว
+//    (LINE ใช้ LINE user ID, อีเมลใช้ "auth:<user id>" เก็บในช่อง profiles.line_user_id)
 // 4) ส่งผลกลับเป็น { ok: true, data } หรือ { ok: false, error }
 //
 // ตั้งค่าใน Supabase > Edge Functions > api:
@@ -14,7 +17,7 @@
 // =========================================================
 
 type Json = Record<string, unknown>;
-type LineUser = { sub: string; name?: string; picture?: string };
+type LineUser = { sub: string; name?: string | null; picture?: string | null };
 
 // action ที่หน้าเว็บเรียกได้ → ชื่อฟังก์ชันในฐานข้อมูล + พารามิเตอร์
 // (รับเฉพาะ action ในรายการนี้เท่านั้น)
@@ -69,6 +72,18 @@ export async function verifyLine(idToken: string): Promise<LineUser> {
   return user;
 }
 
+// ตรวจ access token ของ Supabase Auth (ครูที่ login ด้วยอีเมล)
+export async function verifyEmail(accessToken: string): Promise<LineUser> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) throw new ApiError(500, 'ไม่พบการตั้งค่า Supabase');
+  const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key, Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new ApiError(401, 'invalid_token');
+  const user = await res.json();
+  if (!user?.id) throw new ApiError(401, 'invalid_token');
+  return { sub: `auth:${user.id}`, name: user.email ?? null, picture: null };
+}
+
 // เรียกฟังก์ชันในฐานข้อมูลผ่าน REST (PostgREST)
 export async function callRpc(fn: string, params: Json): Promise<unknown> {
   const url = Deno.env.get('SUPABASE_URL');
@@ -89,7 +104,7 @@ export async function callRpc(fn: string, params: Json): Promise<unknown> {
   throw new ApiError(500, 'เกิดข้อผิดพลาดในระบบ ลองใหม่อีกครั้งนะครับ');
 }
 
-export async function handle(req: Request, deps = { verifyLine, callRpc }): Promise<Response> {
+export async function handle(req: Request, deps = { verifyLine, verifyEmail, callRpc }): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'method_not_allowed' });
 
@@ -101,7 +116,7 @@ export async function handle(req: Request, deps = { verifyLine, callRpc }): Prom
     if (typeof body.idToken !== 'string' || !body.idToken) throw new ApiError(401, 'invalid_token');
     const data: Json = body.data && typeof body.data === 'object' ? body.data : {};
 
-    const user = await deps.verifyLine(body.idToken);
+    const user = body.provider === 'email' ? await deps.verifyEmail(body.idToken) : await deps.verifyLine(body.idToken);
     const result = await deps.callRpc(def.fn, { p_line_user_id: user.sub, ...def.args(data, user) });
     return reply(200, { ok: true, data: result as Json });
   } catch (err) {

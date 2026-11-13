@@ -18,6 +18,7 @@ function makeDeps(opts: { rpcError?: Error } = {}) {
     calls,
     deps: {
       verifyLine: async (_token: string) => ({ sub: 'U-line-1', name: 'Phum', picture: 'https://pic' }),
+      verifyEmail: async (_token: string) => ({ sub: 'auth:teacher-1', name: 'kru@school.ac.th', picture: null }),
       callRpc: async (fn: string, params: Record<string, unknown>) => {
         calls.push({ fn, params });
         if (opts.rpcError) throw opts.rpcError;
@@ -80,6 +81,14 @@ Deno.test('save_questions ส่ง mode เฉพาะ replace / append แล
   assertEq(calls[1].params.p_publish, false);
 });
 
+Deno.test('provider email ใช้ตัวตนจาก Supabase Auth (auth:<id>) และค่าอื่นใช้ LINE', async () => {
+  const { deps, calls } = makeDeps();
+  await handle(post({ action: 'me', provider: 'email', idToken: 't' }), deps);
+  await handle(post({ action: 'me', provider: 'something-else', idToken: 't' }), deps);
+  assertEq(calls[0].params, { p_line_user_id: 'auth:teacher-1', p_display_name: 'kru@school.ac.th', p_picture_url: null });
+  assertEq(calls[1].params.p_line_user_id, 'U-line-1');
+});
+
 Deno.test('body ไม่ใช่ JSON ได้ 400', async () => {
   const { deps } = makeDeps();
   const res = await handle(new Request('http://x/api', { method: 'POST', body: 'not json' }), deps);
@@ -140,6 +149,22 @@ Deno.test('ข้อความ error จากฐานข้อมูล (P00
     const res = await handle(post({ action: 'register', idToken: 'tok', data: {} }));
     assertEq(res.status, 400);
     assertEq(await res.json(), { ok: false, error: 'ลงทะเบียนไว้แล้ว' });
+  },
+));
+
+Deno.test('email: ตรวจ token กับ Supabase Auth ถ้าใช้ไม่ได้ได้ 401 และไม่เรียก LINE', withFetch(
+  (url, init) => {
+    if (url.includes('api.line.me')) throw new Error('ห้ามเรียก LINE');
+    if (url.endsWith('/auth/v1/user')) {
+      const h = init.headers as Record<string, string>;
+      return h.Authorization === 'Bearer good' ? Response.json({ id: 'u-123', email: 'kru@school.ac.th' }) : new Response('{}', { status: 401 });
+    }
+    return Response.json({ ok: 1 });
+  },
+  async () => {
+    assertEq((await handle(post({ action: 'me', provider: 'email', idToken: 'bad' }))).status, 401);
+    const res = await handle(post({ action: 'me', provider: 'email', idToken: 'good' }));
+    assertEq(await res.json(), { ok: true, data: { ok: 1 } });
   },
 ));
 

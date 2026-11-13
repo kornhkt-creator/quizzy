@@ -13,7 +13,7 @@
 
 create table if not exists public.profiles (
   id            uuid primary key default gen_random_uuid(),
-  line_user_id  text not null unique,
+  line_user_id  text not null unique,   -- LINE user ID หรือ "auth:<id>" สำหรับครูที่ login ด้วยอีเมล
   display_name  text,
   picture_url   text,
   full_name     text,
