@@ -76,9 +76,11 @@ export function confirmBox({ img = 'curious', title, text = '', ok = 'ตกล�
 }
 
 export function avatarHtml(profile, cls = '') {
-  const name = profile?.full_name || profile?.display_name || '?';
+  // ตัดคำนำหน้าชื่อออกก่อนเอาตัวอักษรแรก (ด.ช.ภูมิ → ภ)
+  const name = (profile?.full_name || profile?.display_name || '?')
+    .trim().replace(/^(ด\.ช\.|ด\.ญ\.|เด็กชาย|เด็กหญิง|นางสาว|นาย|นาง|ครู|น\.ส\.)\s*/, '');
   const pic = profile?.picture_url;
-  return `<div class="avatar ${cls}">${pic ? `<img src="${esc(pic)}" alt="">` : esc(name.trim().charAt(0))}</div>`;
+  return `<div class="avatar ${cls}">${pic ? `<img src="${esc(pic)}" alt="">` : esc(name.charAt(0) || '?')}</div>`;
 }
 
 export function demoBanner() {

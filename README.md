@@ -18,6 +18,24 @@ python -m http.server 8000
 
 ทำตาม [docs/SETUP.md](docs/SETUP.md) ทีละขั้น (GitHub → Vercel → LINE Developers → Supabase)
 
+## ความปลอดภัย
+
+- หน้าเว็บไม่อ่าน/เขียนฐานข้อมูลโดยตรง ทุกอย่างผ่าน Edge Function `api`
+- `api` ตรวจ LINE ID token กับ LINE ทุกครั้ง แล้วใช้ LINE user ID ที่ยืนยันแล้วเท่านั้น
+- ทุกตารางเปิด RLS โดยไม่มี policy และฟังก์ชัน `api_*` เรียกได้เฉพาะ service role
+- Service role key อยู่ใน Edge Function เท่านั้น ไม่อยู่ในหน้าเว็บ
+
+## ทดสอบ (สำหรับนักพัฒนา)
+
+ต้องมี Node.js 22 ขึ้นไป
+
+```bash
+cd tests && npm install && npm test
+```
+
+- `sql.test.mjs` รัน `schema.sql` บน PostgreSQL จำลอง (PGlite) แล้วทดสอบทุกฟังก์ชัน
+- `api.test.ts` ทดสอบ Edge Function ด้วย Deno โดยจำลอง LINE และฐานข้อมูล
+
 ## เทคโนโลยี
 
 - HTML, CSS, Vanilla JavaScript (ES Modules) ไม่มี build step ไม่ใช้ npm
@@ -33,8 +51,14 @@ teacher.html          หน้าครู
 css/style.css         Design system
 js/config.js          LIFF ID และ URL ของ api
 js/line.js            เชื่อมต่อ LINE (LIFF)
+js/api.js             เรียก server พร้อมแนบ LINE token
+js/mock-api.js        server จำลองสำหรับโหมดทดลอง
 js/ui.js, icons.js    ส่วนแสดงผลที่ใช้ร่วมกัน
 js/student.js         หน้าจอฝั่งนักเรียน
+js/teacher.js         หน้าจอฝั่งครู
+supabase/schema.sql   ตาราง + ฟังก์ชันในฐานข้อมูล (รันใน SQL Editor)
+supabase/functions/api/index.ts   Edge Function ตัวเดียวของระบบ
+tests/                ชุดทดสอบสำหรับนักพัฒนา
 assets/mascot/        ภาพน้องแต่วท่าต่าง ๆ
 assets/reference/     ภาพอ้างอิงตัวละครและสไตล์ UI
 mockup/index.html     Mockup ทุกหน้าจอ
@@ -45,7 +69,7 @@ Prompt-Lite.md        ข้อกำหนดของโปรเจกต์ 
 ## ความคืบหน้า
 
 - [x] Phase 0: เตรียมระบบ + Hello LINE
-- [ ] Phase 1: ฐานข้อมูล + ระบบผู้ใช้
+- [x] Phase 1: ฐานข้อมูล + ระบบผู้ใช้
 - [ ] Phase 2: ครูสร้างชุดสอบ
 - [ ] Phase 3: นักเรียนทำข้อสอบ
 - [ ] Phase 4: ผลสอบ + Excel + เมนู LINE OA

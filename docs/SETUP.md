@@ -72,7 +72,75 @@ git push -u origin main
 LIFF_ID: '2001234567-AbCdEfGh',
 ```
 
-3. บันทึกไฟล์ แล้ว commit และ push ขึ้น GitHub รอ Vercel อัปเดตประมาณ 1 นาที
-4. ส่ง **LIFF URL** เข้าแชต LINE ของตัวเอง แล้วกดเปิดบนมือถือ ควรเห็น **"สวัสดีครับ {ชื่อ LINE}"** พร้อมรูปโปรไฟล์
+3. บันทึกไฟล์ไว้ก่อน แล้วทำขั้นที่ 5–7 ต่อ (ระบบจะใช้งานจริงเมื่อใส่ครบทั้ง `LIFF_ID` และ `API_URL` ถ้าใส่ไม่ครบจะยังเป็นโหมดทดลอง)
+4. เมื่อตั้งค่าครบแล้ว ส่ง **LIFF URL** เข้าแชต LINE ของตัวเอง แล้วกดเปิดบนมือถือ ควรเห็นชื่อและรูปโปรไฟล์ LINE ของคุณในหน้าลงทะเบียน
 
-ถ้าอยากดูโหมดทดลองหลังใส่ LIFF ID แล้ว ให้เติม `?demo` ท้าย URL เช่น `https://quizzy-xxxx.vercel.app/?demo`
+ถ้าอยากดูโหมดทดลองหลังตั้งค่าครบแล้ว ให้เติม `?demo` ท้าย URL เช่น `https://quizzy-xxxx.vercel.app/?demo`
+
+---
+
+## ขั้นที่ 5: สร้างฐานข้อมูลด้วย Supabase
+
+1. ไปที่ https://supabase.com กด **Start your project** แล้วสมัคร (ใช้บัญชี GitHub ได้)
+2. กด **New project**
+   - Name: `quizzy`
+   - Database Password: ตั้งรหัสผ่านแล้ว **จดเก็บไว้ในที่ปลอดภัย**
+   - Region: **Southeast Asia (Singapore)** (ใกล้ไทยที่สุด)
+   - กด **Create new project** แล้วรอประมาณ 2 นาที
+3. เมนูซ้าย **SQL Editor** → **New query**
+   - เปิดไฟล์ `supabase/schema.sql` คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Run**
+   - ควรขึ้น `Success. No rows returned`
+   - ทุกครั้งที่ได้โค้ดเวอร์ชันใหม่ ให้รันไฟล์นี้ซ้ำได้เลย ข้อมูลเดิมไม่หาย
+
+## ขั้นที่ 6: สร้าง Edge Function ชื่อ `api`
+
+1. เมนูซ้าย **Edge Functions** → **Deploy a new function** → **Via Editor**
+2. ตั้งชื่อ function ว่า `api` (ตัวพิมพ์เล็ก)
+3. ลบโค้ดตัวอย่างออกให้หมด เปิดไฟล์ `supabase/functions/api/index.ts` คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Deploy**
+4. เข้าไปที่ function `api` → แท็บ **Details** (หรือ Settings) → **ปิด** ตัวเลือก **Verify JWT** (Enforce JWT verification) แล้วกด Save
+   - ต้องปิด เพราะระบบตรวจตัวตนด้วย LINE token เอง
+5. ไปที่ **Edge Functions → Secrets** (หรือ Project Settings → Edge Functions) → **Add new secret**
+   - Name: `LINE_CHANNEL_ID`
+   - Value: Channel ID ที่จดไว้ในขั้นที่ 3
+6. กลับไปที่ function `api` คัดลอก **URL** ของ function เช่น `https://abcdxyz.supabase.co/functions/v1/api`
+
+ทุกครั้งที่โค้ดใน `index.ts` เปลี่ยน ให้วางโค้ดใหม่แล้วกด Deploy อีกครั้ง
+
+## ขั้นที่ 7: ใส่ URL ของ api ในโค้ด
+
+1. เปิด `js/config.js` ใส่ URL จากขั้นที่ 6
+
+```js
+API_URL: 'https://abcdxyz.supabase.co/functions/v1/api',
+```
+
+2. commit และ push ขึ้น GitHub รอ Vercel อัปเดต
+
+เมื่อใส่ทั้ง `LIFF_ID` และ `API_URL` แล้ว ระบบจะออกจากโหมดทดลองและใช้ข้อมูลจริงทันที
+
+## ขั้นที่ 8: ตั้งตัวเองเป็นครู (ทำครั้งเดียว)
+
+1. บนคอมพิวเตอร์ เปิด `https://quizzy-xxxx.vercel.app/teacher.html` แล้ว login ด้วย LINE
+2. จะขึ้นว่า **"หน้านี้สำหรับครูเท่านั้น"** (เพราะบัญชีใหม่ทุกบัญชีเป็นนักเรียน)
+3. ใน Supabase เมนู **Table Editor** → ตาราง **profiles** → หาแถวที่ `display_name` เป็นชื่อ LINE ของคุณ
+4. ดับเบิลคลิกช่อง `role` เปลี่ยนเป็น `teacher` แล้วกด Save
+5. กลับมาหน้าครู กด **ตั้งค่าแล้ว โหลดใหม่** แล้วตั้งชื่อครู
+
+> ครูควรเปิด `teacher.html` ก่อน ไม่ต้องลงทะเบียนเป็นนักเรียนในหน้า LINE Mini App
+
+### ตรวจว่า Phase 1 ใช้ได้
+
+- [ ] เปิด LIFF URL ในมือถือ ลงทะเบียนชื่อและรหัสนักเรียนได้
+- [ ] ปิดแล้วเปิดใหม่ ระบบจำได้ ไม่ต้องลงทะเบียนซ้ำ
+- [ ] ใน Table Editor เห็นแถวของนักเรียนในตาราง `profiles`
+- [ ] บัญชีนักเรียนเปิด `teacher.html` แล้วขึ้นว่า "สำหรับครูเท่านั้น"
+- [ ] บัญชีครูเข้า `teacher.html` ได้
+
+### แก้ปัญหาที่พบบ่อย
+
+| อาการ | สาเหตุ / วิธีแก้ |
+|---|---|
+| ขึ้น "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID" | ยังไม่ได้เพิ่ม secret ในขั้นที่ 6 ข้อ 5 |
+| เปิดแอปแล้ว login วนไม่จบ | Channel ID ใน secret ไม่ตรงกับ channel ที่มี LIFF นี้ |
+| ขึ้น "เชื่อมต่ออินเทอร์เน็ตไม่ได้" ทั้งที่เน็ตปกติ | `API_URL` ผิด หรือยังไม่ได้ปิด Verify JWT |
+| ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ ดู log ได้ที่ Edge Functions → api → Logs |

@@ -1,0 +1,15 @@
+{
+  "name": "quizzy-tests",
+  "private": true,
+  "type": "module",
+  "description": "ชุดทดสอบสำหรับนักพัฒนา (ตัวแอปไม่ต้องใช้ npm)",
+  "scripts": {
+    "test:sql": "node sql.test.mjs",
+    "test:api": "deno test --allow-env --allow-read api.test.ts",
+    "test": "npm run test:sql && npm run test:api"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "deno": "2.9.6"
+  }
+}
