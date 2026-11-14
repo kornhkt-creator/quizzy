@@ -48,7 +48,9 @@ Deno.test('ไม่มี idToken ได้ 401', async () => {
   const { deps } = makeDeps();
   const res = await handle(post({ action: 'me' }), deps);
   assertEq(res.status, 401);
-  assertEq(await res.json(), { ok: false, error: 'invalid_token' });
+  const body = await res.json();
+  assertEq(body.error, 'invalid_token');
+  assert(body.reason.includes('openid'), 'ต้องบอกให้ตรวจ scope openid');
 });
 
 Deno.test('me ใช้ line_user_id และชื่อจาก token ที่ตรวจแล้ว ไม่ใช่จากหน้าเว็บ', async () => {
@@ -120,6 +122,32 @@ Deno.test('LINE ตอบว่า token ใช้ไม่ได้ → 401', w
   async () => {
     const res = await handle(post({ action: 'me', idToken: 'expired' }));
     assertEq(res.status, 401);
+    assertEq((await res.json()).reason, 'LINE ไม่ยอมรับ token (invalid_request)');
+  },
+));
+
+Deno.test('Channel ID ไม่ตรง → 401 พร้อมบอกให้ตรวจ LINE_CHANNEL_ID', withFetch(
+  (url) => url.includes('api.line.me')
+    ? Response.json({ error: 'invalid_request', error_description: 'Invalid IdToken Audience.' }, { status: 400 })
+    : new Response('null'),
+  async () => {
+    const res = await handle(post({ action: 'me', idToken: 'tok' }));
+    assertEq(res.status, 401);
+    assert((await res.json()).reason.includes('LINE_CHANNEL_ID'), 'ต้องบอกให้ตรวจ LINE_CHANNEL_ID');
+  },
+));
+
+Deno.test('LINE_CHANNEL_ID ที่มีช่องว่างติดมา ถูกตัดก่อนส่งไปตรวจ', withFetch(
+  (url, init) => {
+    if (url.includes('api.line.me')) {
+      assertEq(new URLSearchParams(String(init.body)).get('client_id'), '1234567890');
+      return Response.json({ sub: 'U-real' });
+    }
+    return Response.json({ id: 'p1' });
+  },
+  async () => {
+    Deno.env.set('LINE_CHANNEL_ID', ' 1234567890 \n');
+    assertEq((await handle(post({ action: 'me', idToken: 'tok' }))).status, 200);
   },
 ));
 

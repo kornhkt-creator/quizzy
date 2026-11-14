@@ -100,8 +100,11 @@ Edge Function คือตัวกลางที่ตรวจว่าผู
    - Name: `LINE_CHANNEL_ID`
    - Value: Channel ID ที่จดไว้ในขั้นที่ 4
 6. กลับไปที่ function `api` จด **URL** ของ function เช่น `https://abcdxyz.supabase.co/functions/v1/api`
+7. **ตรวจว่าใช้ได้:** เปิด URL นั้นในเบราว์เซอร์
+   - ขึ้น `{"ok":false,"error":"method_not_allowed"}` = ถูกต้อง
+   - ขึ้น `Missing authorization header` = **Verify JWT ยังเปิดอยู่** กลับไปทำข้อ 4 (อย่าลืมกด Save) อาการคือ login LINE แล้ววนกลับหน้า LINE ไม่จบ
 
-ทุกครั้งที่โค้ดใน `index.ts` เปลี่ยน ให้วางโค้ดใหม่แล้วกด Deploy อีกครั้ง
+ทุกครั้งที่โค้ดใน `index.ts` เปลี่ยน ให้วางโค้ดใหม่แล้วกด Deploy อีกครั้ง แล้วตรวจข้อ 4 และข้อ 7 ซ้ำ (บางครั้ง Verify JWT จะถูกเปิดกลับเอง)
 
 ---
 
@@ -179,8 +182,9 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 | อาการ | สาเหตุ / วิธีแก้ |
 |---|---|
 | ขึ้น "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID" | ยังไม่ได้เพิ่ม secret ในขั้นที่ 5 ข้อ 5 |
-| เปิดแอปแล้ว login วนไม่จบ | Channel ID ใน secret ไม่ตรงกับ channel ที่มี LIFF นี้ |
+| ขึ้น "เข้าสู่ระบบด้วย LINE ไม่สำเร็จ" (หรือ login วนกลับหน้า LINE) | อ่าน **สาเหตุ** ในข้อความ หรือดูที่ Edge Functions → api → **Logs** บรรทัด `401 invalid_token:` ที่พบบ่อยคือ LIFF ไม่ได้ติ๊ก scope **openid** หรือ `LINE_CHANNEL_ID` ไม่ใช่ Channel ID ของ channel ที่มี LIFF นี้ (อย่าใส่ LIFF ID) |
 | ขึ้น "เชื่อมต่ออินเทอร์เน็ตไม่ได้" ทั้งที่เน็ตปกติ | `API_URL` ผิด หรือยังไม่ได้ปิด Verify JWT |
+| login LINE แล้ววนกลับหน้า LINE ไม่จบ | เปิด URL ของ api ในเบราว์เซอร์ ถ้าขึ้น `Missing authorization header` แปลว่ายังไม่ได้ปิด Verify JWT (ขั้นที่ 5 ข้อ 4, 7) |
 | ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ ดู log ได้ที่ Edge Functions → api → Logs |
 | แก้ `config.js` แล้วแต่เว็บยังเป็นโหมดทดลอง | ยังไม่ได้ลากโฟลเดอร์ขึ้น Netlify ใหม่ หรือลากไปผิด project ดูขั้นที่ 6 ข้อ 4 |
 | เปิด LIFF แล้วขึ้นหน้าว่างหรือ 404 | Endpoint URL ใน LIFF ไม่ตรงกับ URL ของ Netlify (เช่น เปลี่ยนชื่อ project หลังสร้าง LIFF) |

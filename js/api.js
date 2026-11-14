@@ -33,12 +33,27 @@ export async function api(action, data = {}) {
 
   const body = await res.json().catch(() => null);
   if (res.status === 401) {
-    // token หมดอายุหรือใช้ไม่ได้: login ใหม่
-    auth.onExpired();
-    throw new Error('กำลังเข้าสู่ระบบใหม่');
+    // token หมดอายุ: login ใหม่ 1 ครั้ง
+    // ถ้า login ใหม่แล้วยังใช้ไม่ได้ แปลว่าตั้งค่าผิด → หยุด แล้วบอกสาเหตุ (ไม่วน login ไม่จบ)
+    if (!sessionStorage.getItem(RELOGIN_KEY)) {
+      sessionStorage.setItem(RELOGIN_KEY, '1');
+      auth.onExpired();
+      throw new Error('กำลังเข้าสู่ระบบใหม่');
+    }
+    sessionStorage.removeItem(RELOGIN_KEY);
+    throw new Error(loginFailedMessage(body?.reason));
   }
+  sessionStorage.removeItem(RELOGIN_KEY);
   if (!body?.ok) throw new Error(body?.error || 'เกิดข้อผิดพลาด ลองใหม่อีกครั้งนะครับ');
   return body.data;
+}
+
+const RELOGIN_KEY = 'quizzy:relogin';
+
+function loginFailedMessage(reason) {
+  const why = reason ? ` สาเหตุ: ${reason}` : '';
+  if (auth.provider === 'email') return `เข้าสู่ระบบไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่${why}`;
+  return `เข้าสู่ระบบด้วย LINE ไม่สำเร็จ${why} (ผู้ดูแลระบบ: ตรวจว่า LIFF ติ๊ก scope openid และ LINE_CHANNEL_ID ใน Supabase ตรงกับ Channel ID ของ channel ที่มี LIFF นี้)`;
 }
 
 export async function resetDemo() {

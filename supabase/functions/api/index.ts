@@ -51,7 +51,21 @@ const CORS = {
 };
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  // reason: คำอธิบายสาเหตุที่ token ใช้ไม่ได้ (ส่งให้หน้าเว็บแสดงและบันทึกลง Logs) ไม่มีข้อมูลลับ
+  constructor(public status: number, message: string, public reason?: string) { super(message); }
+}
+
+// token ใช้ไม่ได้: บันทึกสาเหตุลง Logs ของ Edge Function แล้วตอบ 401
+function invalidToken(reason: string): ApiError {
+  console.warn('401 invalid_token:', reason);
+  return new ApiError(401, 'invalid_token', reason);
+}
+
+// แปลข้อความจาก LINE เป็นคำแนะนำที่ผู้ดูแลแก้ได้
+export function lineReason(desc: string): string {
+  if (/audience/i.test(desc)) return 'Channel ID ไม่ตรง: LINE_CHANNEL_ID ใน Supabase ต้องเป็น Channel ID ของ channel ที่มี LIFF นี้';
+  if (/expired/i.test(desc)) return 'LINE token หมดอายุ';
+  return `LINE ไม่ยอมรับ token (${desc || 'ไม่ทราบสาเหตุ'})`;
 }
 
 const reply = (status: number, body: Json) =>
@@ -59,16 +73,19 @@ const reply = (status: number, body: Json) =>
 
 // ตรวจ LINE ID token: https://developers.line.biz/en/reference/line-login/#verify-id-token
 export async function verifyLine(idToken: string): Promise<LineUser> {
-  const channelId = Deno.env.get('LINE_CHANNEL_ID');
+  const channelId = Deno.env.get('LINE_CHANNEL_ID')?.trim();
   if (!channelId) throw new ApiError(500, 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID ใน Supabase');
   const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ id_token: idToken, client_id: channelId }),
   });
-  if (!res.ok) throw new ApiError(401, 'invalid_token');
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw invalidToken(lineReason(String(err?.error_description ?? err?.error ?? '')));
+  }
   const user = await res.json();
-  if (!user?.sub) throw new ApiError(401, 'invalid_token');
+  if (!user?.sub) throw invalidToken('LINE ไม่ส่งรหัสผู้ใช้กลับมา');
   return user;
 }
 
@@ -78,9 +95,9 @@ export async function verifyEmail(accessToken: string): Promise<LineUser> {
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !key) throw new ApiError(500, 'ไม่พบการตั้งค่า Supabase');
   const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key, Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) throw new ApiError(401, 'invalid_token');
+  if (!res.ok) throw invalidToken('token ของอีเมลหมดอายุหรือใช้ไม่ได้');
   const user = await res.json();
-  if (!user?.id) throw new ApiError(401, 'invalid_token');
+  if (!user?.id) throw invalidToken('token ของอีเมลหมดอายุหรือใช้ไม่ได้');
   return { sub: `auth:${user.id}`, name: user.email ?? null, picture: null };
 }
 
@@ -113,14 +130,18 @@ export async function handle(req: Request, deps = { verifyLine, verifyEmail, cal
     const action = typeof body?.action === 'string' ? body.action : '';
     const def = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : undefined;
     if (!def) throw new ApiError(400, 'ไม่รู้จักคำสั่งนี้');
-    if (typeof body.idToken !== 'string' || !body.idToken) throw new ApiError(401, 'invalid_token');
+    if (typeof body.idToken !== 'string' || !body.idToken) {
+      throw invalidToken(body.provider === 'email' ? 'ไม่ได้ส่ง token ของอีเมลมา' : 'ไม่ได้รับ ID token จาก LINE: ตรวจว่า LIFF ติ๊ก scope openid แล้ว');
+    }
     const data: Json = body.data && typeof body.data === 'object' ? body.data : {};
 
     const user = body.provider === 'email' ? await deps.verifyEmail(body.idToken) : await deps.verifyLine(body.idToken);
     const result = await deps.callRpc(def.fn, { p_line_user_id: user.sub, ...def.args(data, user) });
     return reply(200, { ok: true, data: result as Json });
   } catch (err) {
-    if (err instanceof ApiError) return reply(err.status, { ok: false, error: err.message });
+    if (err instanceof ApiError) {
+      return reply(err.status, err.reason ? { ok: false, error: err.message, reason: err.reason } : { ok: false, error: err.message });
+    }
     console.error(err);
     return reply(500, { ok: false, error: 'เกิดข้อผิดพลาดในระบบ ลองใหม่อีกครั้งนะครับ' });
   }
