@@ -9,6 +9,7 @@ Thumbs.db
 # ความลับ ห้าม commit
 .env
 .env.*
+!.env.example
 
 # ไฟล์ภาพต้นฉบับขนาดใหญ่ (ใช้ไฟล์ใน assets/reference แทน)
 /Cute Cat-Turtle*.png

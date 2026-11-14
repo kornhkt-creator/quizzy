@@ -30,15 +30,15 @@ python -m http.server 8000
 
 ## ติดตั้งใช้งานจริง
 
-ทำตาม [docs/SETUP.md](docs/SETUP.md) ทีละขั้น (GitHub → Vercel → LINE Developers → Supabase)
+ทำตาม [docs/SETUP.md](docs/SETUP.md) ทีละขั้น (GitHub → Vercel → LINE Developers → Supabase → ใส่ค่าลับใน Vercel)
 
 ## ความปลอดภัย
 
-- หน้าเว็บไม่อ่าน/เขียนฐานข้อมูลโดยตรง ทุกอย่างผ่าน Edge Function `api`
+- หน้าเว็บไม่อ่าน/เขียนฐานข้อมูลโดยตรง ทุกอย่างผ่าน `api` (Vercel Function ไฟล์ `api/index.js`)
 - `api` ตรวจ token ทุกครั้ง (LINE ID token กับ LINE หรือ token ของ Supabase Auth สำหรับครูที่ใช้อีเมล) แล้วใช้รหัสผู้ใช้ที่ยืนยันแล้วเท่านั้น
 - บัญชีใหม่ทุกบัญชีเป็นนักเรียน ต้องตั้งเป็นครูใน Supabase เอง
 - ทุกตารางเปิด RLS โดยไม่มี policy และฟังก์ชัน `api_*` เรียกได้เฉพาะ service role
-- Service role key อยู่ใน Edge Function เท่านั้น ไม่อยู่ในหน้าเว็บ
+- Secret / service role key อยู่ใน Environment Variables ของ Vercel เท่านั้น ไม่อยู่ในหน้าเว็บหรือ GitHub
 
 ## ทดสอบ (สำหรับนักพัฒนา)
 
@@ -49,14 +49,14 @@ cd tests && npm install && npm test
 ```
 
 - `sql.test.mjs` รัน `schema.sql` บน PostgreSQL จำลอง (PGlite) แล้วทดสอบทุกฟังก์ชัน
-- `api.test.ts` ทดสอบ Edge Function ด้วย Deno โดยจำลอง LINE และฐานข้อมูล
+- `api.test.ts` ทดสอบ `api/index.js` ด้วย Deno โดยจำลอง LINE และฐานข้อมูล
 
 ## เทคโนโลยี
 
 - HTML, CSS, Vanilla JavaScript (ES Modules) ไม่มี build step ไม่ใช้ npm
 - LINE LIFF SDK v2, ฟอนต์ Kanit, SheetJS (โหลดจาก CDN)
-- Supabase PostgreSQL + Edge Function ตัวเดียวชื่อ `api`
-- Vercel สำหรับเปิดเว็บ
+- Supabase PostgreSQL (ไม่ใช้ Edge Function)
+- Vercel สำหรับเปิดเว็บ และรัน `api` เป็น Vercel Function ตัวเดียว
 
 ## โครงสร้างโปรเจกต์
 
@@ -74,7 +74,9 @@ js/student.js         หน้าจอฝั่งนักเรียน
 js/excel.js           Template / นำเข้า / Export Excel (SheetJS)
 js/teacher.js         หน้าจอฝั่งครู
 supabase/schema.sql   ตาราง + ฟังก์ชันในฐานข้อมูล (รันใน SQL Editor)
-supabase/functions/api/index.ts   Edge Function ตัวเดียวของระบบ
+api/index.js          server ตัวเดียวของระบบ (Vercel Function ที่ /api)
+.env.example          รายชื่อค่าลับสำหรับ Import .env ใน Vercel
+vercel.json           ให้ api รันที่สิงคโปร์ ใกล้ Supabase
 tests/                ชุดทดสอบสำหรับนักพัฒนา
 assets/mascot/        ภาพน้องแต่วท่าต่าง ๆ
 assets/reference/     ภาพอ้างอิงตัวละครและสไตล์ UI

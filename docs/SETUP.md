@@ -72,7 +72,7 @@ git push -u origin main
 LIFF_ID: '2001234567-AbCdEfGh',
 ```
 
-3. บันทึกไฟล์ไว้ก่อน แล้วทำขั้นที่ 5–7 ต่อ (ระบบจะใช้งานจริงเมื่อใส่ครบทั้ง `LIFF_ID` และ `API_URL` ถ้าใส่ไม่ครบจะยังเป็นโหมดทดลอง)
+3. บันทึกไฟล์ไว้ก่อน แล้วทำขั้นที่ 5–7 ต่อ (พอใส่ `LIFF_ID` แล้ว push ระบบจะออกจากโหมดทดลอง จึงควรทำขั้นที่ 5–6 ให้เสร็จก่อน push)
 4. เมื่อตั้งค่าครบแล้ว ส่ง **LIFF URL** เข้าแชต LINE ของตัวเอง แล้วกดเปิดบนมือถือ ควรเห็นชื่อและรูปโปรไฟล์ LINE ของคุณในหน้าลงทะเบียน
 
 ถ้าอยากดูโหมดทดลองหลังตั้งค่าครบแล้ว ให้เติม `?demo` ท้าย URL เช่น `https://quizzy-xxxx.vercel.app/?demo`
@@ -92,31 +92,31 @@ LIFF_ID: '2001234567-AbCdEfGh',
    - ควรขึ้น `Success. No rows returned`
    - ทุกครั้งที่ได้โค้ดเวอร์ชันใหม่ ให้รันไฟล์นี้ซ้ำได้เลย ข้อมูลเดิมไม่หาย
 
-## ขั้นที่ 6: สร้าง Edge Function ชื่อ `api`
+## ขั้นที่ 6: ใส่ค่าลับใน Vercel (Environment Variables)
 
-1. เมนูซ้าย **Edge Functions** → **Deploy a new function** → **Via Editor**
-2. ตั้งชื่อ function ว่า `api` (ตัวพิมพ์เล็ก)
-3. ลบโค้ดตัวอย่างออกให้หมด เปิดไฟล์ `supabase/functions/api/index.ts` คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Deploy**
-4. เข้าไปที่ function `api` → แท็บ **Details** (หรือ Settings) → **ปิด** ตัวเลือก **Verify JWT** (Enforce JWT verification) แล้วกด Save
-   - ต้องปิด เพราะระบบตรวจตัวตนด้วย LINE token เอง
-5. ไปที่ **Edge Functions → Secrets** (หรือ Project Settings → Edge Functions) → **Add new secret**
-   - Name: `LINE_CHANNEL_ID`
-   - Value: Channel ID ที่จดไว้ในขั้นที่ 3
-6. กลับไปที่ function `api` คัดลอก **URL** ของ function เช่น `https://abcdxyz.supabase.co/functions/v1/api`
+ระบบมี server ตัวเดียวคือไฟล์ `api/index.js` ซึ่ง Vercel เปิดให้อัตโนมัติที่ `https://quizzy-xxxx.vercel.app/api` ไม่ต้องสร้าง function ใน Supabase
 
-ทุกครั้งที่โค้ดใน `index.ts` เปลี่ยน ให้วางโค้ดใหม่แล้วกด Deploy อีกครั้ง
+1. หาค่า 3 ตัวนี้มาก่อน
+   - **LINE_CHANNEL_ID**: Channel ID จากขั้นที่ 3
+   - **SUPABASE_URL**: Supabase → **Project Settings → API Keys** → Project URL เช่น `https://abcdxyz.supabase.co`
+   - **SUPABASE_SERVICE_ROLE_KEY**: หน้าเดียวกัน → **Secret keys** → คัดลอก key `sb_secret_...` (ถ้าไม่มี ใช้ `service_role` key ในแท็บ Legacy)
+2. เปิดไฟล์ `.env.example` ในโฟลเดอร์โปรเจกต์ คัดลอกเป็นไฟล์ชื่อ `.env` แล้วกรอกค่าหลังเครื่องหมาย `=` ให้ครบ
+   - ไฟล์ `.env` ถูกกันไว้ไม่ให้ขึ้น GitHub แล้ว **ห้ามใส่ค่าจริงในไฟล์ `.env.example`**
+3. Vercel → เลือกโปรเจกต์ → **Settings → Environment Variables**
+   - กด **Import .env** แล้วเลือกไฟล์ `.env` (หรือคัดลอกเนื้อหาทั้งไฟล์ไปวางในช่อง Key ระบบจะแยกให้เอง)
+   - Environments: **Production and Preview**
+   - ที่ `SUPABASE_SERVICE_ROLE_KEY` เปิด **Sensitive** (ไอคอนแม่กุญแจ) ไว้ แล้วกด **Save**
+4. ไปที่แท็บ **Deployments** → กด **⋯** ที่รายการล่าสุด → **Redeploy** (ค่าที่เพิ่มใหม่จะใช้ได้หลัง deploy ใหม่เท่านั้น)
 
-## ขั้นที่ 7: ใส่ URL ของ api ในโค้ด
+> secret key ใช้ได้เฉพาะใน Vercel เท่านั้น **ห้าม**ใส่ใน `js/config.js` หรือไฟล์ใดที่ขึ้น GitHub
 
-1. เปิด `js/config.js` ใส่ URL จากขั้นที่ 6
+## ขั้นที่ 7: push โค้ดแล้วตรวจ api
 
-```js
-API_URL: 'https://abcdxyz.supabase.co/functions/v1/api',
-```
+1. commit และ push `js/config.js` ที่ใส่ `LIFF_ID` แล้วขึ้น GitHub รอ Vercel อัปเดต
+2. `API_URL` ใน `js/config.js` ตั้งเป็น `'/api'` ไว้แล้ว ไม่ต้องแก้
+3. ตรวจว่า api ทำงาน: เปิด `https://quizzy-xxxx.vercel.app/api` ในเบราว์เซอร์ ควรเห็น `{"ok":false,"error":"method_not_allowed"}` (แปลว่า server ทำงานแล้ว ถ้าขึ้น 404 แปลว่า api ยังไม่ขึ้น)
 
-2. commit และ push ขึ้น GitHub รอ Vercel อัปเดต
-
-เมื่อใส่ทั้ง `LIFF_ID` และ `API_URL` แล้ว ระบบจะออกจากโหมดทดลองและใช้ข้อมูลจริงทันที
+ไฟล์ `vercel.json` ตั้งให้ api รันที่สิงคโปร์ (`sin1`) ใกล้ Supabase จะได้ตอบเร็ว ถ้าสร้าง Supabase ไว้ region อื่นให้แก้ให้ตรงกัน
 
 ## ขั้นที่ 8: สร้างบัญชีครู
 
@@ -175,18 +175,19 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 
 | อาการ | สาเหตุ / วิธีแก้ |
 |---|---|
-| ขึ้น "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID" | ยังไม่ได้เพิ่ม secret ในขั้นที่ 6 ข้อ 5 |
-| เปิดแอปแล้ว login วนไม่จบ | Channel ID ใน secret ไม่ตรงกับ channel ที่มี LIFF นี้ |
-| ขึ้น "เชื่อมต่ออินเทอร์เน็ตไม่ได้" ทั้งที่เน็ตปกติ | `API_URL` ผิด หรือยังไม่ได้ปิด Verify JWT |
-| ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ ดู log ได้ที่ Edge Functions → api → Logs |
+| ขึ้น "ยังไม่ได้ตั้งค่า ... ใน Vercel" | ยังไม่ได้ใส่ Environment Variables ในขั้นที่ 6 หรือใส่แล้วแต่ยังไม่ได้ Redeploy |
+| เปิดแอปแล้ว login วนไม่จบ | `LINE_CHANNEL_ID` ใน Vercel ไม่ตรงกับ channel ที่มี LIFF นี้ |
+| ขึ้น "เกิดข้อผิดพลาด" ทุกหน้า และเปิด `/api` แล้วขึ้น 404 | ไฟล์ `api/index.js` หรือ `package.json` ไม่ได้ขึ้น GitHub ตรวจว่า push ครบ |
+| ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ หรือ secret key ผิด ดู log ได้ที่ Vercel → โปรเจกต์ → **Logs** |
 
 ---
 
 ## เมื่อได้โค้ดเวอร์ชันใหม่ (เช่น จบแต่ละ Phase)
 
 1. รัน `supabase/schema.sql` ทั้งไฟล์ใน SQL Editor อีกครั้ง (ข้อมูลเดิมไม่หาย)
-2. วางโค้ด `supabase/functions/api/index.ts` ใหม่ใน Edge Function `api` แล้วกด Deploy
-3. push โค้ดขึ้น GitHub ให้ Vercel อัปเดตหน้าเว็บ
+2. push โค้ดขึ้น GitHub ให้ Vercel อัปเดตทั้งหน้าเว็บและ api
+
+> ถ้าเคยติดตั้งเวอร์ชันที่ใช้ Supabase Edge Function มาก่อน: ทำขั้นที่ 6 ให้เสร็จ แล้วลบ function `api` ใน Supabase → Edge Functions ทิ้งได้เลย
 
 ### ตรวจว่า Phase 2 ใช้ได้ (ครูสร้างชุดสอบ)
 

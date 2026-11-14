@@ -1,9 +1,8 @@
 // =========================================================
-// ทดสอบ Edge Function (supabase/functions/api/index.ts) โดยไม่เรียก LINE / Supabase จริง
+// ทดสอบ api (api/index.js ที่รันบน Vercel) โดยไม่เรียก LINE / Supabase จริง
 // วิธีรัน (ในโฟลเดอร์ tests):  npm run test:api
 // =========================================================
-Deno.env.set('QUIZZY_TEST', '1');
-const { handle } = await import('../supabase/functions/api/index.ts');
+const { handle, POST } = await import('../api/index.js');
 
 function assert(cond: unknown, msg: string) { if (!cond) throw new Error(msg); }
 function assertEq(a: unknown, b: unknown, msg = '') {
@@ -28,6 +27,11 @@ function makeDeps(opts: { rpcError?: Error } = {}) {
   };
 }
 const post = (body: unknown) => new Request('http://x/api', { method: 'POST', body: JSON.stringify(body) });
+
+Deno.test('Vercel เรียก POST แล้วได้ผลแบบเดียวกับ handle', async () => {
+  const res = await POST(post({ action: 'nope', idToken: 't' }));
+  assertEq(res.status, 400);
+});
 
 Deno.test('OPTIONS ตอบ CORS', async () => {
   const res = await handle(new Request('http://x/api', { method: 'OPTIONS' }));
@@ -170,7 +174,7 @@ Deno.test('email: ตรวจ token กับ Supabase Auth ถ้าใช้�
 
 // รายชื่อ action ทั้งหมด (อ่านจากไฟล์ เพื่อทดสอบทุก action อัตโนมัติ)
 async function actionsList() {
-  const src = await Deno.readTextFile(new URL('../supabase/functions/api/index.ts', import.meta.url));
+  const src = await Deno.readTextFile(new URL('../api/index.js', import.meta.url));
   const block = src.slice(src.indexOf('const ACTIONS'), src.indexOf('const CORS'));
   return Object.fromEntries([...block.matchAll(/^\s{2}(\w+): \{ fn:/gm)].map((m) => [m[1], true]));
 }

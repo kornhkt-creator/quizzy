@@ -5,8 +5,8 @@
 export const CONFIG = {
   // LIFF ID จาก LINE Developers เช่น '2001234567-AbCdEfGh'
   LIFF_ID: '',
-  // URL ของ Edge Function เช่น 'https://abcdxyz.supabase.co/functions/v1/api'
-  API_URL: '',
+  // URL ของ api (Vercel Function ในโปรเจกต์นี้) ปกติไม่ต้องแก้
+  API_URL: '/api',
 
   // ---- ไม่บังคับ: ให้ครู login หน้าครูด้วยอีเมล + รหัสผ่าน (ไม่ต้องใช้ LINE) ----
   // ดูได้ที่ Supabase > Project Settings > API Keys

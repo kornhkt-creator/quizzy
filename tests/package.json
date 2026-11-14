@@ -5,7 +5,7 @@
   "description": "ชุดทดสอบสำหรับนักพัฒนา (ตัวแอปไม่ต้องใช้ npm)",
   "scripts": {
     "test:sql": "node sql.test.mjs",
-    "test:api": "deno test --allow-env --allow-read api.test.ts",
+    "test:api": "deno test --allow-env --allow-read --no-check api.test.ts",
     "test": "npm run test:sql && npm run test:api"
   },
   "devDependencies": {

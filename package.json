@@ -1,0 +1,6 @@
+{
+  "name": "quizzy-lite",
+  "private": true,
+  "type": "module",
+  "description": "หน้าเว็บไม่มี build step ไฟล์นี้มีไว้ให้ Vercel รัน api/index.js แบบ ES Module เท่านั้น"
+}

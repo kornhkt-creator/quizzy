@@ -1,5 +1,5 @@
 // =========================================================
-// เรียก server (Edge Function "api") พร้อมแนบ token ยืนยันตัวตน
+// เรียก server (Vercel Function /api) พร้อมแนบ token ยืนยันตัวตน
 // - ค่าเริ่มต้น: LINE ID token
 // - หน้าครูที่ login ด้วยอีเมล: เรียก useAuth(...) เพื่อเปลี่ยนเป็น token ของ Supabase Auth
 // ในโหมดทดลองจะใช้ js/mock-api.js แทน
