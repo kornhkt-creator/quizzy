@@ -65,7 +65,7 @@ svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-widt
 }
 .view { flex: 1; display: flex; flex-direction: column; }
 .body { flex: 1; padding: 8px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-.body.with-tabbar { padding-bottom: 88px; }
+.body.with-tabbar { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
 
 .appbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px 8px; min-height: 56px; }
 .appbar h1, .appbar h3 { font-size: 17px; font-weight: 600; flex: 1; text-align: center; }
@@ -169,15 +169,23 @@ button.card.list-row { width: 100%; border: 0; text-align: left; }
 .banner img { position: absolute; right: -6px; bottom: -4px; width: 118px; }
 
 /* ---------- Bottom tab bar ---------- */
+/* ความสูงไม่ตายตัว: เว้นที่ใต้แถบสำหรับขีดปัดกลับของ iPhone (safe area) โดยไม่บีบไอคอน */
 .tabbar {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 480px; height: 66px; z-index: 10;
-  background: #fff; border-top: 1px solid var(--line);
-  display: flex; justify-content: space-around; align-items: center;
-  padding-bottom: env(safe-area-inset-bottom);
+  width: 100%; max-width: 480px; z-index: 10;
+  background: rgba(255, 255, 255, .97); backdrop-filter: blur(10px);
+  border-radius: 22px 22px 0 0; box-shadow: 0 -6px 22px rgba(80, 70, 40, .08);
+  display: flex; gap: 4px; align-items: center;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
 }
-.tabbar button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: #A6A49A; padding: 6px 12px; }
-.tabbar button.on { color: var(--orange-d); }
+.tabbar button {
+  flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 12px; color: #A6A49A;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 7px 4px 6px; border-radius: 16px; white-space: nowrap;
+  transition: color .15s, background .15s;
+}
+.tabbar button svg.i { width: 22px; height: 22px; }
+.tabbar button.on { color: var(--orange-d); background: var(--orange-soft); font-weight: 500; }
 
 /* ---------- ทำข้อสอบ ---------- */
 .q-num { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: var(--pill); background: var(--green-soft); color: var(--green); font-size: 13px; font-weight: 600; }
