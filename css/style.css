@@ -315,7 +315,30 @@ td.why { color: var(--red); font-weight: 500; }
 .foot-actions div { display: flex; gap: 10px; }
 .foot-actions .btn { width: auto; }
 
+/* ---------- เช็คชื่อเข้าเรียน ---------- */
+.att-code { text-align: center; padding: 22px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.att-code .digits { display: flex; gap: 14px; justify-content: center; margin: 4px 0; }
+.att-code .digits i { font-style: normal; font-weight: 700; font-size: 72px; line-height: 1; color: var(--brown); background: var(--cream); border-radius: 20px; width: 1.2em; padding: .16em 0; font-variant-numeric: tabular-nums; }
+.att-left { font-size: 18px; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
+.att-left.warn { color: var(--orange-d); }
+.att-count { font-size: 15px; color: var(--muted); }
+.att-code:fullscreen { justify-content: center; background: var(--page); gap: 3vh; border-radius: 0; }
+.att-code:fullscreen .digits { gap: 3vw; }
+.att-code:fullscreen .digits i { font-size: 26vh; border-radius: 4vh; }
+.att-code:fullscreen .att-left, .att-code:fullscreen .att-count, .att-code:fullscreen .muted { font-size: 3.6vh; }
+.att-code:fullscreen [data-act="att-full"] { display: none; }
+.att-sel { width: auto; min-height: 34px; padding: 4px 10px; font-size: 14px; }
+.att-form { display: flex; flex-direction: column; gap: 12px; padding: 20px 16px; }
+.code-input {
+  width: 100%; text-align: center; font: inherit; font-size: 40px; font-weight: 700; letter-spacing: .45em;
+  padding: 8px 0 8px .45em; border: 1.5px solid var(--line); border-radius: var(--r-md); color: var(--brown);
+  background: #fff; font-variant-numeric: tabular-nums;
+}
+.code-input:focus { outline: none; border-color: var(--green2); box-shadow: 0 0 0 3px var(--green-soft); }
+.code-input::placeholder { color: #D9D6CA; }
+
 @media (max-width: 860px) {
+  .att-code .digits i { font-size: 52px; }
   .t-app { flex-direction: column; }
   .side { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 12px; gap: 6px; }
   .brand { padding: 0 8px 0 0; }

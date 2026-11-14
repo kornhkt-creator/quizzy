@@ -4,7 +4,7 @@
 import { IS_DEMO } from './config.js';
 import { initLine } from './line.js';
 import { api } from './api.js';
-import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration } from './ui.js';
+import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
 import { icon, leaf } from './icons.js';
 
 const app = document.getElementById('app');
@@ -97,7 +97,7 @@ function renderRegister() {
 // =========================================================
 function tabbar() {
   const t = (id, ic, label) => `<button class="${state.tab === id ? 'on' : ''}" data-tab="${id}">${icon(ic)}${label}</button>`;
-  return `<nav class="tabbar">${t('home', 'home', 'หน้าแรก')}${t('history', 'chart', 'ผลสอบของฉัน')}${t('profile', 'user', 'โปรไฟล์')}</nav>`;
+  return `<nav class="tabbar">${t('home', 'home', 'หน้าแรก')}${t('checkin', 'check', 'เช็คชื่อ')}${t('history', 'chart', 'ผลสอบของฉัน')}${t('profile', 'user', 'โปรไฟล์')}</nav>`;
 }
 
 function showTab(tab) {
@@ -105,6 +105,7 @@ function showTab(tab) {
   state.tab = tab;
   window.scrollTo(0, 0);
   if (tab === 'home') renderHome();
+  else if (tab === 'checkin') renderCheckin();
   else if (tab === 'history') renderHistory();
   else renderProfile();
 }
@@ -431,6 +432,107 @@ async function renderHistory() {
   }
 }
 
+// =========================================================
+// เช็คชื่อเข้าเรียน
+// =========================================================
+function renderCheckin() {
+  app.innerHTML = `
+    ${top()}
+    <div class="appbar"><h1>เช็คชื่อเข้าเรียน</h1></div>
+    <div class="body with-tabbar">
+      <div id="att-box">${checkinFormHtml()}</div>
+      <div class="sec" style="margin-top:6px"><h2>ประวัติการเข้าเรียน</h2></div>
+      <div id="att-hist">${loadingHtml()}</div>
+    </div>
+    ${tabbar()}`;
+  bindCheckinForm();
+  loadAttHistory();
+}
+
+const checkinFormHtml = () => `
+  <form class="card att-form" id="att-form" novalidate>
+    <img src="${mascot('front')}" alt="" style="height:86px;margin:0 auto">
+    <b style="font-size:17px;color:var(--brown);text-align:center">กรอกรหัส 4 หลักจากจอของครู</b>
+    <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" aria-label="รหัสเช็คชื่อ">
+    <button class="btn btn-primary" type="submit">เช็คชื่อ</button>
+  </form>`;
+
+function bindCheckinForm() {
+  const form = document.getElementById('att-form');
+  const input = form.code;
+  input.addEventListener('input', () => {
+    // รับเลขไทยได้ และเหลือเฉพาะตัวเลข
+    input.value = input.value.replace(/[๐-๙]/g, (c) => String('๐๑๒๓๔๕๖๗๘๙'.indexOf(c))).replace(/\D/g, '').slice(0, 4);
+    if (input.value.length === 4) form.requestSubmit();
+  });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    checkIn(form);
+  });
+}
+
+async function checkIn(form) {
+  const code = form.code.value;
+  if (code.length !== 4) return toast('กรอกรหัสให้ครบ 4 หลัก', 'error');
+  const btn = form.querySelector('button');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'กำลังเช็คชื่อ…';
+  try {
+    const r = await api('att_checkin', { code });
+    if (r.result === 'wrong_code') {
+      toast(`รหัสไม่ถูกต้อง ดูที่จอของครูอีกครั้งนะครับ (ลองได้อีก ${r.attempts_left} ครั้ง)`, 'error');
+      form.code.value = '';
+      form.code.focus();
+      return;
+    }
+    const late = r.status === 'late';
+    const title = r.result === 'already' ? 'เช็คชื่อคาบนี้ไปแล้ว' : late ? 'เช็คชื่อแล้ว (สาย)' : 'เช็คชื่อแล้ว!';
+    document.getElementById('att-box').innerHTML = `
+      <div class="card att-form center">
+        <img src="${mascot(late ? 'surprised' : 'happy')}" alt="" style="height:100px;margin:0 auto">
+        <b style="font-size:19px;color:var(--brown)">${title}</b>
+        <div class="muted" style="font-size:14px">${esc(r.title)}${r.checked_at ? ` · ${fmtDate(r.checked_at)}` : ''}</div>
+        <div>${attPill(r.status)}</div>
+        <button class="btn btn-secondary btn-sm" data-act="att-again" style="margin:4px auto 0;width:auto">เช็คชื่อคาบอื่น</button>
+      </div>`;
+    loadAttHistory();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = 'เช็คชื่อ'; }
+  }
+}
+
+async function loadAttHistory() {
+  const box = document.getElementById('att-hist');
+  if (!box) return;
+  try {
+    const h = await api('att_history');
+    if (!document.body.contains(box)) return;
+    if (!h.rows.length) {
+      box.innerHTML = '<p class="muted center" style="font-size:14px;padding:12px">ยังไม่มีประวัติการเช็คชื่อ</p>';
+      return;
+    }
+    const s = h.summary;
+    box.innerHTML = `
+      <div class="card" style="padding:12px 14px">
+        <div class="mini-stats" style="margin-top:0">
+          <div><b style="color:var(--green)">${s.present}</b>มา</div><div><b style="color:var(--orange-d)">${s.late}</b>สาย</div>
+          <div><b style="color:var(--red)">${s.absent}</b>ขาด</div><div><b>${s.leave}</b>ลา</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${h.rows.map((r) => `
+        <div class="card list-row">
+          <div class="tile ${['present', 'late'].includes(r.status) ? 'g' : ''} sm">${icon(['present', 'late'].includes(r.status) ? 'check' : 'clock')}</div>
+          <div class="t"><b>${esc(r.title)}</b><small>${fmtDate(r.opens_at)}${r.checked_at ? ` · เช็คเมื่อ ${fmtDate(r.checked_at)}` : ''}</small></div>
+          ${r.status === 'pending' ? '<span class="pill orange">ยังไม่เช็ค</span>' : attPill(r.status)}
+        </div>`).join('')}</div>`;
+  } catch (err) {
+    box.innerHTML = `<p class="muted center" style="font-size:14px">${esc(err.message)}</p>`;
+  }
+}
+
 // ---------- โปรไฟล์ ----------
 function renderProfile() {
   const me = state.me;
@@ -467,6 +569,10 @@ app.addEventListener('click', (e) => {
     case 'grid': return openGrid();
     case 'finish': return confirmSubmit();
     case 'retry-submit': return submitExam();
+    case 'att-again':
+      document.getElementById('att-box').innerHTML = checkinFormHtml();
+      bindCheckinForm();
+      return document.querySelector('#att-form input').focus();
   }
 });
 

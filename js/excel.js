@@ -161,5 +161,74 @@ export async function exportResults(data) {
   X.utils.book_append_sheet(wb, people, 'ผลสอบรายคน');
   X.utils.book_append_sheet(wb, items, 'วิเคราะห์รายข้อ');
   X.utils.book_append_sheet(wb, sum, 'สรุป');
-  X.writeFile(wb, `ผลสอบ-${exam.title.replace(/[\\/:*?"<>|]/g, '').slice(0, 80)}.xlsx`);
+  X.writeFile(wb, `ผลสอบ-${safeName(exam.title)}.xlsx`);
+}
+
+const safeName = (t) => String(t).replace(/[\\/:*?"<>|]/g, '-').slice(0, 80);
+
+// ---------- Export เช็คชื่อ ----------
+const ATT_TEXT = { present: 'มา', late: 'สาย', absent: 'ขาด', leave: 'ลา', pending: 'ยังไม่เช็ค' };
+
+// คาบเดียว: รายชื่อ + สรุป
+export async function exportAttendance(s) {
+  const X = await loadXLSX();
+  const people = X.utils.aoa_to_sheet([
+    ['ลำดับ', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', 'สถานะ', 'เวลาเช็คชื่อ', 'หมายเหตุ'],
+    ...s.rows.map((r, i) => [
+      i + 1, r.student_code ?? '', r.full_name ?? r.display_name ?? '', ATT_TEXT[r.status],
+      r.checked_at ? fmtDate(r.checked_at) : '', r.edited ? 'ครูบันทึก/แก้ไข' : '',
+    ]),
+  ]);
+  people['!cols'] = [{ wch: 6 }, { wch: 13 }, { wch: 28 }, { wch: 10 }, { wch: 18 }, { wch: 16 }];
+
+  const c = s.counts;
+  const sum = X.utils.aoa_to_sheet([
+    ['คาบ', s.title],
+    ['เปิดเช็คชื่อ', fmtDate(s.opens_at)],
+    ['ปิดเช็คชื่อ', fmtDate(s.closes_at)],
+    ['นับว่าสายหลัง', s.late_at === s.closes_at ? '-' : fmtDate(s.late_at)],
+    ['มา', c.present], ['สาย', c.late], ['ขาด', c.absent], ['ลา', c.leave], ['ยังไม่เช็ค', c.pending], ['ทั้งหมด', c.total],
+    ['ส่งออกเมื่อ', fmtDate(new Date().toISOString())],
+  ]);
+  sum['!cols'] = [{ wch: 16 }, { wch: 40 }];
+
+  const wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, people, 'รายชื่อ');
+  X.utils.book_append_sheet(wb, sum, 'สรุป');
+  X.writeFile(wb, `เช็คชื่อ-${safeName(s.title)}.xlsx`);
+}
+
+// ทุกคาบ: ตารางนักเรียน × คาบ พร้อมรวมจำนวนและร้อยละการมาเรียน
+export async function exportAttendanceSummary({ sessions, students, cells }) {
+  const X = await loadXLSX();
+  const at = new Map(cells.map((c) => [`${c.session_id}|${c.profile_id}`, c.status]));
+  const rows = students.map((p, i) => {
+    const marks = sessions.map((s) => at.get(`${s.id}|${p.id}`) ?? '');
+    const n = (st) => marks.filter((m) => m === st).length;
+    const counted = n('present') + n('late') + n('absent'); // ลา และยังไม่เช็ค ไม่นำมาคิด
+    return [
+      i + 1, p.student_code ?? '', p.full_name ?? '',
+      ...marks.map((m) => ATT_TEXT[m] ?? '-'),
+      n('present'), n('late'), n('absent'), n('leave'),
+      counted ? Math.round(((n('present') + n('late')) * 100) / counted) : '',
+    ];
+  });
+  const table = X.utils.aoa_to_sheet([
+    ['ลำดับ', 'รหัสนักเรียน', 'ชื่อ-นามสกุล', ...sessions.map((s) => `${fmtDate(s.opens_at, false)} ${s.title}`), 'มา', 'สาย', 'ขาด', 'ลา', 'ร้อยละการมาเรียน'],
+    ...rows,
+  ]);
+  table['!cols'] = [{ wch: 6 }, { wch: 13 }, { wch: 28 }, ...sessions.map(() => ({ wch: 14 })), { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 16 }];
+
+  const list = X.utils.aoa_to_sheet([
+    ['ลำดับ', 'วันที่', 'คาบ'],
+    ...sessions.map((s, i) => [i + 1, fmtDate(s.opens_at), s.title]),
+    [],
+    ['ร้อยละการมาเรียน = (มา + สาย) ÷ (มา + สาย + ขาด) × 100 · ไม่นับคาบที่ลา'],
+  ]);
+  list['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 50 }];
+
+  const wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, table, 'สรุปการเข้าเรียน');
+  X.utils.book_append_sheet(wb, list, 'รายการคาบ');
+  X.writeFile(wb, `สรุปเช็คชื่อ-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

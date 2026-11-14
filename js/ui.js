@@ -83,6 +83,17 @@ export function avatarHtml(profile, cls = '') {
   return `<div class="avatar ${cls}">${pic ? `<img src="${esc(pic)}" alt="">` : esc(name.charAt(0) || '?')}</div>`;
 }
 
+// ---------- สถานะการเช็คชื่อ ----------
+export const ATT_STATUS = {
+  present: ['green', 'มา'],
+  late: ['orange', 'สาย'],
+  absent: ['red', 'ขาด'],
+  leave: ['gray', 'ลา'],
+  pending: ['gray', 'ยังไม่เช็ค'],
+};
+export const attPill = (status) => `<span class="pill ${ATT_STATUS[status][0]}">${ATT_STATUS[status][1]}</span>`;
+export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('th-TH', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }) : '-');
+
 export function demoBanner() {
   return '<div class="demo-banner">โหมดทดลอง: ข้อมูลจำลองเก็บในเครื่องนี้เท่านั้น ยังไม่เชื่อมต่อ LINE</div>';
 }

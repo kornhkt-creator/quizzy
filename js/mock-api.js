@@ -23,6 +23,9 @@ function seed() {
     exams: [],
     questions: [],
     attempts: [],
+    att_sessions: [],
+    att_records: [],
+    att_failures: [],
   };
   const addExam = (id, title, minutes, published, qs) => {
     db.exams.push({ id, title, description: 'ชุดสอบตัวอย่างในโหมดทดลอง', duration_minutes: minutes, pass_percent: 50, open_at: null, close_at: null, is_published: published, created_by: 'p-teacher', created_at: nowIso(), updated_at: nowIso() });
@@ -48,7 +51,7 @@ function seed() {
   const qs = db.questions.filter((q) => q.exam_id === 'demo-exam-1');
   names.forEach((name, i) => {
     const pid = `p-demo-${i}`;
-    db.profiles.push({ id: pid, line_user_id: `demo-s${i}`, display_name: name, picture_url: null, full_name: name, student_code: String(65001 + i), role: 'student', created_at: nowIso() });
+    db.profiles.push({ id: pid, line_user_id: `demo-s${i}`, display_name: name, picture_url: null, full_name: name, student_code: String(65001 + i), role: 'student', created_at: new Date(Date.now() - 7 * 86400e3).toISOString() });
     if (!picks[i]) return;
     const answers = Object.fromEntries(qs.map((q, j) => [q.id, picks[i][j]]));
     const right = qs.filter((q) => answers[q.id] === q.correct_answer);
@@ -59,11 +62,29 @@ function seed() {
       correct_count: right.length, is_late: i === 3,
     });
   });
+
+  // คาบเช็คชื่อเมื่อวาน (ปิดแล้ว): มา 4 สาย 1 ลา 1 ขาด 1
+  const open = Date.now() - 86400e3;
+  db.att_sessions.push({
+    id: 'demo-att-1', title: 'ตัวอย่าง: คณิตศาสตร์ คาบ 1', code: '4821', opens_at: new Date(open).toISOString(),
+    late_at: new Date(open + 10 * 60e3).toISOString(), closes_at: new Date(open + 15 * 60e3).toISOString(), created_by: 'p-teacher', created_at: new Date(open).toISOString(),
+  });
+  ['present', 'present', 'late', 'present', null, 'leave', 'present'].forEach((st, i) => {
+    if (!st) return;
+    const at = st === 'leave' ? null : new Date(open + (st === 'late' ? 12 : 2 + i) * 60e3).toISOString();
+    db.att_records.push({ session_id: 'demo-att-1', profile_id: `p-demo-${i}`, status: st, checked_at: at, edited: st === 'leave' });
+  });
   return db;
 }
 
 function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { return seed(); }
+  let db;
+  try { db = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { db = seed(); }
+  // ข้อมูลทดลองที่บันทึกไว้ก่อนมีระบบเช็คชื่อ
+  db.att_sessions ??= [];
+  db.att_records ??= [];
+  db.att_failures ??= [];
+  return db;
 }
 function save(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
 export function reset() { localStorage.removeItem(KEY); }
@@ -148,6 +169,37 @@ function paper(db, a, e) {
       options: ['A', 'B', 'C', 'D'].map((k) => ({ key: k, text: q[`option_${k.toLowerCase()}`] })).filter((o) => o.text != null),
     })),
   };
+}
+
+// ---------- เช็คชื่อ (เหมือน qz_att_* ใน schema.sql) ----------
+const byStudent = (x, y) => (x.student_code ?? '￿').localeCompare(y.student_code ?? '￿') || String(x.full_name).localeCompare(String(y.full_name));
+function findSession(db, id) { return db.att_sessions.find((s) => s.id === id) || fail('ไม่พบคาบเช็คชื่อนี้'); }
+function attRoster(db, s) {
+  const recs = db.att_records.filter((r) => r.session_id === s.id);
+  const open = Date.now() < Date.parse(s.closes_at);
+  return db.profiles
+    .filter((p) => (p.role === 'student' && p.full_name != null && p.created_at <= s.closes_at) || recs.some((r) => r.profile_id === p.id))
+    .sort(byStudent)
+    .map((p) => {
+      const r = recs.find((x) => x.profile_id === p.id);
+      return {
+        profile_id: p.id, student_code: p.student_code, full_name: p.full_name, display_name: p.display_name,
+        status: r ? r.status : open ? 'pending' : 'absent', checked_at: r?.checked_at ?? null, edited: !!r?.edited,
+      };
+    });
+}
+function attJson(db, s) {
+  const rows = attRoster(db, s);
+  const n = (st) => rows.filter((r) => r.status === st).length;
+  return {
+    id: s.id, title: s.title, code: s.code, opens_at: s.opens_at, late_at: s.late_at, closes_at: s.closes_at,
+    status: Date.now() < Date.parse(s.closes_at) ? 'open' : 'closed', server_now: nowIso(),
+    counts: { total: rows.length, present: n('present'), late: n('late'), absent: n('absent'), leave: n('leave'), pending: n('pending') },
+  };
+}
+function attDetail(db, id) {
+  const s = findSession(db, id);
+  return { ...attJson(db, s), rows: attRoster(db, s) };
 }
 
 // ---------- action (ชื่อเดียวกับ server) ----------
@@ -354,6 +406,125 @@ const H = {
       is_late: Date.now() > Date.parse(a.deadline_at) + 60e3,
     });
     return { status: 'submitted', result: attemptJson(db, a, e) };
+  },
+
+  // ---------- เช็คชื่อเข้าเรียน ----------
+  att_open(db, d) {
+    const t = teacher(db);
+    const x = d.session || {};
+    let title = String(x.title ?? '').trim();
+    const min = String(x.minutes ?? '') === '' ? 15 : toInt(x.minutes);
+    const lateRaw = String(x.late_minutes ?? '');
+    const late = lateRaw === '' ? null : toInt(lateRaw);
+    if (!title) title = `เช็คชื่อ ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '')}`;
+    if (title.length > 200) fail('ชื่อคาบยาวเกิน 200 ตัวอักษร');
+    if (min == null || min < 1 || min > 240) fail('เวลาเปิดเช็คชื่อต้องอยู่ระหว่าง 1–240 นาที');
+    if (lateRaw !== '' && (late == null || late < 0)) fail('เวลานับสายต้องเป็นตัวเลข 0 ขึ้นไป');
+    let code;
+    do { code = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); }
+    while (db.att_sessions.some((s) => s.code === code && Date.parse(s.closes_at) > Date.now()));
+    const now = Date.now();
+    const s = {
+      id: uuid(), title, code, opens_at: new Date(now).toISOString(),
+      late_at: new Date(now + Math.min(late ?? min, min) * 60e3).toISOString(),
+      closes_at: new Date(now + min * 60e3).toISOString(), created_by: t.id, created_at: nowIso(),
+    };
+    db.att_sessions.push(s);
+    return attDetail(db, s.id);
+  },
+
+  att_list(db) {
+    teacher(db);
+    return [...db.att_sessions].sort((a, b) => b.opens_at.localeCompare(a.opens_at)).map((s) => attJson(db, s));
+  },
+
+  att_detail(db, d) {
+    teacher(db);
+    return attDetail(db, d.session_id);
+  },
+
+  att_set(db, d) {
+    teacher(db);
+    findSession(db, d.session_id);
+    if (!db.profiles.some((p) => p.id === d.profile_id && p.role === 'student')) fail('ไม่พบนักเรียนคนนี้');
+    const i = db.att_records.findIndex((r) => r.session_id === d.session_id && r.profile_id === d.profile_id);
+    if (d.status === 'none') {
+      if (i >= 0) db.att_records.splice(i, 1);
+    } else if (['present', 'late', 'absent', 'leave'].includes(d.status)) {
+      if (i >= 0) Object.assign(db.att_records[i], { status: d.status, edited: true });
+      else db.att_records.push({ session_id: d.session_id, profile_id: d.profile_id, status: d.status, checked_at: null, edited: true });
+    } else fail('สถานะไม่ถูกต้อง');
+    return attDetail(db, d.session_id);
+  },
+
+  att_close(db, d) {
+    teacher(db);
+    const s = findSession(db, d.session_id);
+    const end = new Date(Math.max(Date.now(), Date.parse(s.opens_at) + 1000)).toISOString();
+    if (end < s.closes_at) s.closes_at = end;
+    if (end < s.late_at) s.late_at = end;
+    return attDetail(db, s.id);
+  },
+
+  att_delete(db, d) {
+    teacher(db);
+    findSession(db, d.session_id);
+    db.att_sessions = db.att_sessions.filter((s) => s.id !== d.session_id);
+    db.att_records = db.att_records.filter((r) => r.session_id !== d.session_id);
+    return { deleted: true };
+  },
+
+  att_report(db) {
+    teacher(db);
+    const sessions = [...db.att_sessions].sort((a, b) => a.opens_at.localeCompare(b.opens_at));
+    const students = db.profiles
+      .filter((p) => (p.role === 'student' && p.full_name != null) || db.att_records.some((r) => r.profile_id === p.id))
+      .sort(byStudent)
+      .map((p) => ({ id: p.id, student_code: p.student_code, full_name: p.full_name ?? p.display_name }));
+    return {
+      sessions: sessions.map((s) => ({ id: s.id, title: s.title, opens_at: s.opens_at })),
+      students,
+      cells: sessions.flatMap((s) => attRoster(db, s).map((r) => ({ session_id: s.id, profile_id: r.profile_id, status: r.status }))),
+    };
+  },
+
+  att_checkin(db, d) {
+    const p = student(db);
+    if (p.role !== 'student') fail('เช็คชื่อได้เฉพาะบัญชีนักเรียน');
+    const now = Date.now();
+    db.att_failures = db.att_failures.filter((f) => f.profile_id !== p.id || Date.parse(f.at) >= now - 10 * 60e3);
+    const fails = db.att_failures.filter((f) => f.profile_id === p.id).length;
+    if (fails >= 5) fail('ใส่รหัสผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่ หรือแจ้งครู');
+    const code = String(d.code ?? '').replace(/[๐-๙]/g, (c) => String('๐๑๒๓๔๕๖๗๘๙'.indexOf(c))).replace(/\D/g, '');
+    if (code.length !== 4) fail('รหัสเช็คชื่อมี 4 หลัก');
+    const s = db.att_sessions
+      .filter((x) => x.code === code && Date.parse(x.opens_at) <= now && Date.parse(x.closes_at) > now)
+      .sort((a, b) => b.opens_at.localeCompare(a.opens_at))[0];
+    if (!s) {
+      if (db.att_sessions.some((x) => x.code === code && Date.parse(x.closes_at) <= now && Date.parse(x.closes_at) > now - 3 * 3600e3)) {
+        fail('หมดเวลาเช็คชื่อคาบนี้แล้ว แจ้งครูได้เลย');
+      }
+      db.att_failures.push({ profile_id: p.id, at: nowIso() });
+      return { result: 'wrong_code', attempts_left: 4 - fails };
+    }
+    const r = db.att_records.find((x) => x.session_id === s.id && x.profile_id === p.id);
+    if (r) return { result: 'already', status: r.status, checked_at: r.checked_at, title: s.title };
+    const rec = { session_id: s.id, profile_id: p.id, status: now > Date.parse(s.late_at) ? 'late' : 'present', checked_at: nowIso(), edited: false };
+    db.att_records.push(rec);
+    return { result: 'ok', status: rec.status, checked_at: rec.checked_at, title: s.title };
+  },
+
+  att_history(db) {
+    const p = student(db);
+    const rows = [...db.att_sessions].sort((a, b) => b.opens_at.localeCompare(a.opens_at)).flatMap((s) => {
+      const r = attRoster(db, s).find((x) => x.profile_id === p.id);
+      return r ? [{
+        id: s.id, title: s.title, opens_at: s.opens_at, closes_at: s.closes_at,
+        session_status: Date.now() < Date.parse(s.closes_at) ? 'open' : 'closed', status: r.status, checked_at: r.checked_at,
+      }] : [];
+    }).slice(0, 200);
+    const n = (st) => rows.filter((r) => r.status === st).length;
+    return { rows, summary: { present: n('present'), late: n('late'), absent: n('absent'), leave: n('leave') } };
   },
 };
 

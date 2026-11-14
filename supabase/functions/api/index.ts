@@ -42,6 +42,17 @@ const ACTIONS: Record<string, { fn: string; args: (d: Json, u: LineUser) => Json
   list_exams: { fn: 'api_list_exams', args: () => ({}) },
   start_exam: { fn: 'api_start_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null }) },
   submit_exam: { fn: 'api_submit_exam', args: (d) => ({ p_exam_id: d.exam_id ?? null, p_answers: d.answers ?? {} }) },
+
+  // ---------- เช็คชื่อเข้าเรียน ----------
+  att_open: { fn: 'api_att_open', args: (d) => ({ p_session: d.session ?? {} }) },
+  att_list: { fn: 'api_att_list', args: () => ({}) },
+  att_detail: { fn: 'api_att_detail', args: (d) => ({ p_session_id: d.session_id ?? null }) },
+  att_set: { fn: 'api_att_set', args: (d) => ({ p_session_id: d.session_id ?? null, p_profile_id: d.profile_id ?? null, p_status: d.status ?? null }) },
+  att_close: { fn: 'api_att_close', args: (d) => ({ p_session_id: d.session_id ?? null }) },
+  att_delete: { fn: 'api_att_delete', args: (d) => ({ p_session_id: d.session_id ?? null }) },
+  att_report: { fn: 'api_att_report', args: () => ({}) },
+  att_checkin: { fn: 'api_att_checkin', args: (d) => ({ p_code: d.code ?? null }) },
+  att_history: { fn: 'api_att_history', args: () => ({}) },
 };
 
 const CORS = {

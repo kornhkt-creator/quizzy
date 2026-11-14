@@ -5,7 +5,7 @@ import { IS_DEMO } from './config.js';
 import { initLine, lineLogin, lineLogout } from './line.js';
 import { api, resetDemo, useAuth, authProvider } from './api.js';
 import { emailLoginEnabled, getSession, signIn, signOut, getAccessToken, clearSession } from './email-auth.js';
-import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate } from './ui.js';
+import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtTime, fmtDuration, attPill } from './ui.js';
 import { icon } from './icons.js';
 
 const app = document.getElementById('app');
@@ -158,9 +158,10 @@ function renderRegister() {
 const NAV = [
   ['exams', 'clip', 'ชุดสอบ'],
   ['results', 'chart', 'ผลสอบ'],
+  ['attendance', 'users', 'เช็คชื่อ'],
   ['import', 'upload', 'นำเข้า Excel'],
 ];
-const MENU_OF = { edit: 'exams' };
+const MENU_OF = { edit: 'exams', att: 'attendance' };
 
 function shell(content) {
   const current = MENU_OF[state.view] || state.view;
@@ -187,9 +188,10 @@ async function go(view, params = {}) {
     if (!leave) return;
     state.dirty = false;
   }
+  stopAttTimer();
   state.view = view;
   window.scrollTo(0, 0);
-  const views = { exams: viewExams, edit: viewEditor, results: viewResults, import: viewImport };
+  const views = { exams: viewExams, edit: viewEditor, results: viewResults, import: viewImport, attendance: viewAttendance, att: viewAttSession };
   (views[view] || viewExams)(params);
 }
 window.addEventListener('beforeunload', (e) => { if (state.dirty) e.preventDefault(); });
@@ -474,6 +476,203 @@ function renderResults(exams) {
 }
 
 // =========================================================
+// เช็คชื่อเข้าเรียน
+// =========================================================
+const statCard = (ic, g, big, small, id = '') =>
+  `<div class="card stat"${id ? ` id="${id}"` : ''}><div class="tile ${g ? 'g' : ''}">${icon(ic)}</div><div><b>${big}</b><small>${small}</small></div></div>`;
+
+function stopAttTimer() {
+  clearInterval(state.attTimer);
+  state.attTimer = null;
+}
+
+async function viewAttendance() {
+  shell(`
+    <div class="main-head">
+      <div><h1>เช็คชื่อเข้าเรียน</h1><p id="sub">กำลังโหลด…</p></div>
+      <div class="head-actions">
+        <button class="btn btn-secondary" data-act="att-export-all">${icon('download')}Export สรุปทั้งหมด</button>
+        <button class="btn btn-primary" data-act="att-new">${icon('plus')}เปิดเช็คชื่อ</button>
+      </div>
+    </div>
+    <div id="att-new"></div>
+    <div id="list">${loadingHtml()}</div>`);
+  const list = document.getElementById('list');
+  try {
+    const sessions = await api('att_list');
+    const open = sessions.filter((s) => s.status === 'open').length;
+    document.getElementById('sub').textContent = `${sessions.length} คาบ${open ? ` · เปิดอยู่ ${open} คาบ` : ''}`;
+    if (!sessions.length) {
+      list.innerHTML = stateHtml({ img: 'sleep', title: 'ยังไม่มีการเช็คชื่อ', text: 'กด "เปิดเช็คชื่อ" ตอนเริ่มคาบ ระบบจะสุ่มรหัส 4 หลักให้ขึ้นจอ นักเรียนกรอกรหัสในแอป LINE' });
+      return;
+    }
+    list.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${sessions.map((s) => {
+      const c = s.counts;
+      const open = s.status === 'open';
+      return `
+        <button class="card list-row" data-go="att" data-id="${s.id}">
+          <div class="tile ${open ? '' : 'g'}">${icon(open ? 'clock' : 'users')}</div>
+          <div class="t"><b>${esc(s.title)}</b><small>${fmtDate(s.opens_at)} · มา ${c.present} · สาย ${c.late} · ${open ? `ยังไม่เช็ค ${c.pending}` : `ขาด ${c.absent}`} · ลา ${c.leave}</small></div>
+          ${open ? `<span class="pill green">● เปิดอยู่ · รหัส ${esc(s.code)}</span>` : '<span class="pill gray">ปิดแล้ว</span>'}
+        </button>`;
+    }).join('')}</div>`;
+  } catch (err) { list.innerHTML = errorState(err); }
+}
+
+function renderAttForm() {
+  const box = document.getElementById('att-new');
+  if (!box || box.innerHTML) return box?.querySelector('input')?.focus();
+  box.innerHTML = `
+    <form class="card form-grid" id="att-form" style="padding:18px" novalidate>
+      <label class="field full"><span>ชื่อคาบ</span><input name="title" maxlength="200" value="${esc(`เช็คชื่อ ${fmtDate(new Date().toISOString(), false)}`)}" placeholder="เช่น ม.4/1 คณิตศาสตร์ คาบ 2"></label>
+      <label class="field"><span>เปิดให้เช็คชื่อนาน (นาที)</span><input name="minutes" type="number" min="1" max="240" value="15"></label>
+      <label class="field"><span>เช็คหลังกี่นาทีนับว่าสาย (เว้นว่าง = ไม่นับสาย)</span><input name="late_minutes" type="number" min="0" max="240" value="10"></label>
+      <div class="full" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary btn-auto" data-act="att-cancel">ยกเลิก</button>
+        <button type="submit" class="btn btn-primary btn-auto">${icon('check')}เปิดเช็คชื่อและแสดงรหัส</button>
+      </div>
+    </form>`;
+  const form = box.querySelector('form');
+  form.title.select();
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('[type=submit]');
+    btn.disabled = true;
+    try {
+      const s = await api('att_open', { session: { title: form.title.value, minutes: form.minutes.value, late_minutes: form.late_minutes.value } });
+      go('att', { id: s.id });
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+    }
+  });
+}
+
+async function viewAttSession({ id } = {}) {
+  if (!id) return go('attendance');
+  shell(loadingHtml());
+  try {
+    state.att = await api('att_detail', { session_id: id });
+    renderAtt();
+  } catch (err) { main().innerHTML = errorState(err); }
+}
+
+// มีบันทึกจริงไหม (ไม่ใช่ "ยังไม่เช็ค/ขาด" ที่ระบบคิดให้)
+const hasRecord = (r) => r.checked_at != null || r.edited;
+
+function attStatsHtml(s) {
+  const c = s.counts;
+  const open = s.status === 'open';
+  return `
+    ${statCard('check', true, `${c.present}`, 'มา')}
+    ${statCard('clock', false, `${c.late}`, 'สาย')}
+    ${statCard('users', false, `${open ? c.pending : c.absent}`, open ? 'ยังไม่เช็ค' : 'ขาด')}
+    ${statCard('file', true, `${c.leave}`, `ลา · ทั้งหมด ${c.total} คน`)}`;
+}
+
+function attRowsHtml(s) {
+  const open = s.status === 'open';
+  const opt = (v, label, sel) => `<option value="${v}" ${sel ? 'selected' : ''}>${label}</option>`;
+  return s.rows.map((r, i) => {
+    const cur = hasRecord(r) ? r.status : 'none';
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.student_code || '-')}</td>
+        <td>${esc(r.full_name || r.display_name || '-')}</td>
+        <td>${r.checked_at ? fmtTime(r.checked_at) : '<span class="muted">–</span>'}${r.edited ? ' <span class="muted" style="font-size:12px">(ครูบันทึก)</span>' : ''}</td>
+        <td>${attPill(r.status)}</td>
+        <td><select class="input att-sel" data-act="att-set" data-pid="${r.profile_id}" aria-label="แก้สถานะ">
+          ${opt('present', 'มา', cur === 'present')}${opt('late', 'สาย', cur === 'late')}${opt('leave', 'ลา', cur === 'leave')}${opt('absent', 'ขาด', cur === 'absent')}
+          ${opt('none', open ? 'ยังไม่เช็ค' : 'ไม่ได้เช็ค (ขาด)', cur === 'none')}
+        </select></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderAtt() {
+  const s = state.att;
+  const open = s.status === 'open';
+  const noLate = s.late_at === s.closes_at;
+  state.attOffset = Date.parse(s.server_now) - Date.now(); // ชดเชยนาฬิกาเครื่องที่ไม่ตรง
+  main().innerHTML = `
+    <div class="main-head">
+      <div>
+        <button class="btn-icon" data-go="attendance" style="width:auto;border-radius:99px;padding:0 10px 0 4px;color:var(--muted);font-size:14px;display:inline-flex;gap:2px">${icon('back')}การเช็คชื่อทั้งหมด</button>
+        <h1>${esc(s.title)}</h1>
+        <p>${open ? '<span class="pill green">● เปิดอยู่</span>' : '<span class="pill gray">ปิดแล้ว</span>'}
+          ${fmtDate(s.opens_at)} – ${fmtTime(s.closes_at)}${open ? ` · ${noLate ? 'ไม่นับสาย' : `เช็คหลัง ${fmtTime(s.late_at)} นับว่าสาย`}` : ''}</p>
+      </div>
+      <div class="head-actions">
+        ${open ? `<button class="btn btn-secondary" data-act="att-close">${icon('close')}ปิดเช็คชื่อตอนนี้</button>` : ''}
+        <button class="btn btn-secondary" data-act="att-export">${icon('download')}Export Excel</button>
+      </div>
+    </div>
+    ${open ? `
+      <div class="card att-code" id="att-code">
+        <div class="muted">รหัสเช็คชื่อ</div>
+        <div class="digits">${s.code.split('').map((d) => `<i>${d}</i>`).join('')}</div>
+        <div class="att-left" id="att-left">เหลือเวลา --:--</div>
+        <div class="att-count" id="att-count"></div>
+        <p class="muted">นักเรียนเปิด Quizzy ใน LINE → แท็บ <b>เช็คชื่อ</b> → กรอกรหัสนี้</p>
+        <button class="btn btn-secondary btn-sm" data-act="att-full">${icon('eye')}ขยายเต็มจอ (สำหรับโปรเจกเตอร์)</button>
+      </div>` : ''}
+    <div class="stats" id="att-stats">${attStatsHtml(s)}</div>
+    <div class="card table-wrap" style="padding:8px 8px 4px">
+      <table>
+        <thead><tr><th>#</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เวลาเช็ค</th><th>สถานะ</th><th>แก้สถานะ</th></tr></thead>
+        <tbody id="att-rows">${attRowsHtml(s)}</tbody>
+      </table>
+      ${s.rows.length ? '' : '<p class="muted center" style="padding:20px">ยังไม่มีนักเรียนลงทะเบียน</p>'}
+    </div>
+    <div class="foot-actions">
+      <div><button class="btn btn-danger" data-act="att-delete">${icon('trash')}ลบคาบนี้</button></div>
+      <p>${icon('info', 'width:16px;height:16px')}แก้สถานะรายคนได้ตลอด เช่น ลาป่วย หรือมาหลังปิดเช็คชื่อ</p>
+    </div>`;
+  stopAttTimer();
+  if (open) {
+    attTick();
+    state.attTimer = setInterval(attTick, 1000);
+  }
+}
+
+// ทุกวินาที: นับถอยหลัง / ทุก 5 วินาที: ดึงรายชื่อล่าสุด
+let attTicks = 0;
+function attTick() {
+  const s = state.att;
+  if (!s || state.view !== 'att') return stopAttTimer();
+  const ms = Date.parse(s.closes_at) - (Date.now() + (state.attOffset || 0));
+  const left = document.getElementById('att-left');
+  if (left) {
+    left.textContent = ms > 0 ? `เหลือเวลา ${fmtDuration(ms / 1000)}` : 'หมดเวลาแล้ว';
+    left.classList.toggle('warn', ms < 60e3);
+  }
+  const count = document.getElementById('att-count');
+  if (count) count.textContent = `เช็คแล้ว ${s.counts.total - s.counts.pending} / ${s.counts.total} คน`;
+  attTicks += 1;
+  if (ms <= 0 || attTicks % 5 === 0) refreshAtt();
+}
+
+async function refreshAtt() {
+  if (state.attLoading || !state.att) return;
+  state.attLoading = true;
+  try {
+    const fresh = await api('att_detail', { session_id: state.att.id });
+    if (state.view !== 'att' || fresh.id !== state.att.id) return;
+    const statusChanged = fresh.status !== state.att.status;
+    state.att = fresh;
+    if (statusChanged) return renderAtt(); // หมดเวลา: แสดงแบบปิดแล้ว
+    document.getElementById('att-stats').innerHTML = attStatsHtml(fresh);
+    // ไม่วาดตารางใหม่ระหว่างครูกำลังเลือกสถานะ
+    if (!document.activeElement?.classList.contains('att-sel')) document.getElementById('att-rows').innerHTML = attRowsHtml(fresh);
+  } catch (err) {
+    console.warn('โหลดรายชื่อเช็คชื่อไม่สำเร็จ', err);
+  } finally {
+    state.attLoading = false;
+  }
+}
+
+// =========================================================
 // นำเข้าข้อสอบจาก Excel
 // =========================================================
 async function viewImport({ id } = {}) {
@@ -619,7 +818,22 @@ app.addEventListener('change', (e) => {
     else if (t.dataset.imp === 'mode') state.imp.mode = t.value;
   }
   if (t.dataset.act === 'switch-results') go('results', { id: t.value });
+  if (t.dataset.act === 'att-set') setAttStatus(t);
 });
+
+async function setAttStatus(sel) {
+  sel.disabled = true;
+  try {
+    state.att = await api('att_set', { session_id: state.att.id, profile_id: sel.dataset.pid, status: sel.value });
+    sel.blur();
+    document.getElementById('att-stats').innerHTML = attStatsHtml(state.att);
+    document.getElementById('att-rows').innerHTML = attRowsHtml(state.att);
+    toast('บันทึกสถานะแล้ว');
+  } catch (err) {
+    toast(err.message, 'error');
+    sel.disabled = false;
+  }
+}
 app.addEventListener('input', (e) => {
   const t = e.target;
   if (state.view === 'import' && (t.dataset.imp === 'title' || t.dataset.imp === 'duration')) state.imp[t.dataset.imp] = t.value;
@@ -656,6 +870,38 @@ app.addEventListener('click', async (e) => {
       return;
     case 'import-cancel':
       return renderImportPick();
+    case 'att-new':
+      return renderAttForm();
+    case 'att-cancel':
+      document.getElementById('att-new').innerHTML = '';
+      return;
+    case 'att-full':
+      return document.getElementById('att-code')?.requestFullscreen?.().catch(() => toast('เบราว์เซอร์นี้ขยายเต็มจอไม่ได้ กด F11 แทนได้', 'error'));
+    case 'att-close': {
+      const ok = await confirmBox({ title: 'ปิดเช็คชื่อตอนนี้?', text: 'นักเรียนที่ยังไม่เช็คจะนับว่าขาด (แก้สถานะรายคนทีหลังได้)', ok: 'ปิดเช็คชื่อ', center: true });
+      if (!ok) return;
+      try { state.att = await api('att_close', { session_id: state.att.id }); renderAtt(); toast('ปิดเช็คชื่อแล้ว'); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    case 'att-delete': {
+      const ok = await confirmBox({ img: 'surprised', title: 'ลบคาบเช็คชื่อนี้?', text: 'ข้อมูลการเข้าเรียนของคาบนี้จะถูกลบ และกู้คืนไม่ได้', ok: 'ลบถาวร', danger: true, center: true });
+      if (!ok) return;
+      try { await api('att_delete', { session_id: state.att.id }); toast('ลบคาบแล้ว'); go('attendance'); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    case 'att-export':
+      try { await (await import('./excel.js')).exportAttendance(state.att); toast('ดาวน์โหลดไฟล์ Excel แล้ว'); } catch (err) { toast(err.message, 'error'); }
+      return;
+    case 'att-export-all':
+      try {
+        const report = await api('att_report');
+        if (!report.sessions.length) return toast('ยังไม่มีการเช็คชื่อให้ export');
+        await (await import('./excel.js')).exportAttendanceSummary(report);
+        toast('ดาวน์โหลดไฟล์ Excel แล้ว');
+      } catch (err) { toast(err.message, 'error'); }
+      return;
     case 'import-go':
       return runImport(el);
     case 'publish':

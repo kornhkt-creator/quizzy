@@ -102,7 +102,7 @@ await test('ทุกตารางเปิด RLS', async () => {
 
 // ---------- ชุดทดสอบของ phase ถัดไป ----------
 const ctx = { db, api, asService, rejects, test };
-for (const f of ['./sql.phase2.mjs', './sql.phase3.mjs', './sql.phase4.mjs']) {
+for (const f of ['./sql.phase2.mjs', './sql.phase3.mjs', './sql.phase4.mjs', './sql.phase5.mjs']) {
   try { await (await import(f)).default(ctx); }
   catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e; }
 }

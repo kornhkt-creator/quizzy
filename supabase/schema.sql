@@ -575,6 +575,271 @@ begin
 end $$;
 
 -- =========================================================
+-- เช็คชื่อเข้าเรียน (Phase 5)
+-- ครูเปิดคาบ → ระบบสุ่มรหัส 4 หลักขึ้นจอ → นักเรียนกรอกรหัสในแอปภายในเวลาที่กำหนด
+-- =========================================================
+
+create table if not exists public.att_sessions (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null check (length(trim(title)) between 1 and 200),
+  code        text not null check (code ~ '^[0-9]{4}$'),
+  opens_at    timestamptz not null default now(),
+  late_at     timestamptz not null,   -- เช็คหลังเวลานี้ = สาย (เท่ากับ closes_at = ไม่นับสาย)
+  closes_at   timestamptz not null,   -- หลังเวลานี้เช็คเองไม่ได้ คนที่ไม่ได้เช็ค = ขาด
+  created_by  uuid references public.profiles (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  check (late_at >= opens_at and late_at <= closes_at and closes_at > opens_at)
+);
+create index if not exists att_sessions_code_idx on public.att_sessions (code, closes_at);
+
+create table if not exists public.att_records (
+  session_id  uuid not null references public.att_sessions (id) on delete cascade,
+  profile_id  uuid not null references public.profiles (id) on delete cascade,
+  status      text not null check (status in ('present', 'late', 'absent', 'leave')),
+  checked_at  timestamptz,                     -- เวลาที่นักเรียนเช็คเอง (null = ครูบันทึกให้)
+  edited      boolean not null default false,  -- ครูแก้สถานะเอง
+  updated_at  timestamptz not null default now(),
+  primary key (session_id, profile_id)
+);
+create index if not exists att_records_profile_idx on public.att_records (profile_id);
+
+-- รหัสผิด: เก็บไว้กันการสุ่มรหัส (ผิดเกิน 5 ครั้งใน 10 นาที ต้องรอ)
+create table if not exists public.att_failures (
+  profile_id  uuid not null references public.profiles (id) on delete cascade,
+  at          timestamptz not null default now()
+);
+create index if not exists att_failures_idx on public.att_failures (profile_id, at);
+
+alter table public.att_sessions enable row level security;
+alter table public.att_records  enable row level security;
+alter table public.att_failures enable row level security;
+revoke all on public.att_sessions, public.att_records, public.att_failures from anon, authenticated;
+grant select, insert, update, delete on public.att_sessions, public.att_records, public.att_failures to service_role;
+
+-- รายชื่อของคาบหนึ่ง: นักเรียนที่ลงทะเบียนก่อนคาบปิด + ทุกคนที่มีบันทึกในคาบนี้
+-- status: present มา / late สาย / absent ขาด / leave ลา / pending ยังไม่เช็ค (คาบยังเปิดอยู่)
+create or replace function public.qz_att_roster(p_session_id uuid)
+returns table (profile_id uuid, student_code text, full_name text, display_name text, status text, checked_at timestamptz, edited boolean)
+language sql stable set search_path = public as $$
+  select p.id, p.student_code, p.full_name, p.display_name,
+         coalesce(r.status, case when now() < s.closes_at then 'pending' else 'absent' end),
+         r.checked_at, coalesce(r.edited, false)
+  from att_sessions s
+  join profiles p on (p.role = 'student' and p.full_name is not null and p.created_at <= s.closes_at)
+                  or exists (select 1 from att_records x where x.session_id = s.id and x.profile_id = p.id)
+  left join att_records r on r.session_id = s.id and r.profile_id = p.id
+  where s.id = p_session_id
+$$;
+
+create or replace function public.qz_att_json(s public.att_sessions)
+returns jsonb language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'id', s.id, 'title', s.title, 'code', s.code,
+    'opens_at', s.opens_at, 'late_at', s.late_at, 'closes_at', s.closes_at,
+    'status', case when now() < s.closes_at then 'open' else 'closed' end,
+    'server_now', now(),
+    'counts', (select jsonb_build_object(
+        'total', count(*),
+        'present', count(*) filter (where r.status = 'present'),
+        'late', count(*) filter (where r.status = 'late'),
+        'absent', count(*) filter (where r.status = 'absent'),
+        'leave', count(*) filter (where r.status = 'leave'),
+        'pending', count(*) filter (where r.status = 'pending'))
+      from qz_att_roster(s.id) r))
+$$;
+
+create or replace function public.qz_att_detail(p_session_id uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare s att_sessions;
+begin
+  select * into s from att_sessions where id = p_session_id;
+  if not found then raise exception 'ไม่พบคาบเช็คชื่อนี้'; end if;
+  return qz_att_json(s) || jsonb_build_object('rows', coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'profile_id', r.profile_id, 'student_code', r.student_code, 'full_name', r.full_name,
+      'display_name', r.display_name, 'status', r.status, 'checked_at', r.checked_at, 'edited', r.edited
+    ) order by r.student_code nulls last, r.full_name)
+    from qz_att_roster(s.id) r), '[]'::jsonb));
+end $$;
+
+-- ครูเปิดคาบเช็คชื่อ: { title, minutes (เปิดกี่นาที), late_minutes (เกินกี่นาทีนับว่าสาย, ว่าง = ไม่นับสาย) }
+create or replace function public.api_att_open(p_line_user_id text, p_session jsonb)
+returns jsonb language plpgsql set search_path = public as $$
+declare
+  t profiles;
+  s att_sessions;
+  v_title text := trim(coalesce(p_session->>'title', ''));
+  v_min   int  := coalesce(qz_int(nullif(p_session->>'minutes', '')), 15);
+  v_late  int  := qz_int(nullif(p_session->>'late_minutes', ''));
+  v_code  text;
+  i int := 0;
+begin
+  t := qz_teacher(p_line_user_id);
+  if v_title = '' then v_title := 'เช็คชื่อ ' || to_char(now() at time zone 'Asia/Bangkok', 'DD/MM/YYYY HH24:MI'); end if;
+  if length(v_title) > 200 then raise exception 'ชื่อคาบยาวเกิน 200 ตัวอักษร'; end if;
+  if v_min not between 1 and 240 then raise exception 'เวลาเปิดเช็คชื่อต้องอยู่ระหว่าง 1–240 นาที'; end if;
+  if coalesce(p_session->>'late_minutes', '') <> '' and (v_late is null or v_late < 0) then
+    raise exception 'เวลานับสายต้องเป็นตัวเลข 0 ขึ้นไป';
+  end if;
+
+  -- สุ่มรหัสที่ไม่ซ้ำกับคาบที่ยังเปิดอยู่
+  loop
+    i := i + 1;
+    v_code := lpad(floor(random() * 10000)::int::text, 4, '0');
+    exit when not exists (select 1 from att_sessions where code = v_code and closes_at > now());
+    if i > 50 then raise exception 'เปิดคาบพร้อมกันมากเกินไป ปิดคาบเก่าก่อนแล้วลองใหม่'; end if;
+  end loop;
+
+  insert into att_sessions (title, code, opens_at, late_at, closes_at, created_by)
+  values (v_title, v_code, now(),
+          now() + make_interval(mins => least(coalesce(v_late, v_min), v_min)),
+          now() + make_interval(mins => v_min), t.id)
+  returning * into s;
+  return qz_att_detail(s.id);
+end $$;
+
+create or replace function public.api_att_list(p_line_user_id text)
+returns jsonb language plpgsql stable set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  return coalesce((select jsonb_agg(qz_att_json(s) order by s.opens_at desc) from att_sessions s), '[]'::jsonb);
+end $$;
+
+create or replace function public.api_att_detail(p_line_user_id text, p_session_id uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  return qz_att_detail(p_session_id);
+end $$;
+
+-- ครูแก้สถานะรายคน: present / late / absent / leave หรือ none = ลบบันทึก (กลับเป็นยังไม่เช็ค/ขาด)
+create or replace function public.api_att_set(p_line_user_id text, p_session_id uuid, p_profile_id uuid, p_status text)
+returns jsonb language plpgsql set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  if not exists (select 1 from att_sessions where id = p_session_id) then raise exception 'ไม่พบคาบเช็คชื่อนี้'; end if;
+  if not exists (select 1 from profiles where id = p_profile_id and role = 'student') then raise exception 'ไม่พบนักเรียนคนนี้'; end if;
+  if p_status = 'none' then
+    delete from att_records where session_id = p_session_id and profile_id = p_profile_id;
+  elsif p_status in ('present', 'late', 'absent', 'leave') then
+    insert into att_records (session_id, profile_id, status, edited)
+    values (p_session_id, p_profile_id, p_status, true)
+    on conflict (session_id, profile_id) do update set status = excluded.status, edited = true, updated_at = now();
+  else
+    raise exception 'สถานะไม่ถูกต้อง';
+  end if;
+  return qz_att_detail(p_session_id);
+end $$;
+
+-- ปิดคาบทันที (คนที่ยังไม่เช็ค = ขาด)
+create or replace function public.api_att_close(p_line_user_id text, p_session_id uuid)
+returns jsonb language plpgsql set search_path = public as $$
+declare v_end timestamptz;
+begin
+  perform qz_teacher(p_line_user_id);
+  select greatest(now(), opens_at + interval '1 second') into v_end from att_sessions where id = p_session_id;
+  if not found then raise exception 'ไม่พบคาบเช็คชื่อนี้'; end if;
+  update att_sessions set closes_at = least(closes_at, v_end), late_at = least(late_at, v_end) where id = p_session_id;
+  return qz_att_detail(p_session_id);
+end $$;
+
+create or replace function public.api_att_delete(p_line_user_id text, p_session_id uuid)
+returns jsonb language plpgsql set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  delete from att_sessions where id = p_session_id;
+  if not found then raise exception 'ไม่พบคาบเช็คชื่อนี้'; end if;
+  return jsonb_build_object('deleted', true);
+end $$;
+
+-- นักเรียนกรอกรหัส
+-- ผลลัพธ์ result: ok = เช็คสำเร็จ, already = เคยเช็คแล้ว, wrong_code = รหัสไม่ถูก (ไม่ raise เพื่อให้บันทึกครั้งที่ผิดไว้ได้)
+create or replace function public.api_att_checkin(p_line_user_id text, p_code text)
+returns jsonb language plpgsql set search_path = public as $$
+declare
+  p profiles; s att_sessions; r att_records; v_fails int;
+  v_code text := regexp_replace(translate(coalesce(p_code, ''), '๐๑๒๓๔๕๖๗๘๙', '0123456789'), '[^0-9]', '', 'g');
+begin
+  p := qz_student(p_line_user_id);
+  if p.role <> 'student' then raise exception 'เช็คชื่อได้เฉพาะบัญชีนักเรียน'; end if;
+  delete from att_failures where profile_id = p.id and at < now() - interval '10 minutes';
+  select count(*) into v_fails from att_failures where profile_id = p.id;
+  if v_fails >= 5 then raise exception 'ใส่รหัสผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่ หรือแจ้งครู'; end if;
+  if length(v_code) <> 4 then raise exception 'รหัสเช็คชื่อมี 4 หลัก'; end if;
+
+  select * into s from att_sessions
+  where code = v_code and opens_at <= now() and closes_at > now()
+  order by opens_at desc limit 1;
+
+  if not found then
+    if exists (select 1 from att_sessions where code = v_code and closes_at <= now() and closes_at > now() - interval '3 hours') then
+      raise exception 'หมดเวลาเช็คชื่อคาบนี้แล้ว แจ้งครูได้เลย';
+    end if;
+    insert into att_failures (profile_id) values (p.id);
+    return jsonb_build_object('result', 'wrong_code', 'attempts_left', 4 - v_fails);
+  end if;
+
+  select * into r from att_records where session_id = s.id and profile_id = p.id;
+  if found then
+    return jsonb_build_object('result', 'already', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title);
+  end if;
+
+  insert into att_records (session_id, profile_id, status, checked_at)
+  values (s.id, p.id, case when now() > s.late_at then 'late' else 'present' end, now())
+  on conflict (session_id, profile_id) do nothing
+  returning * into r;
+  if r.session_id is null then   -- กดซ้อนกันสองครั้ง
+    select * into r from att_records where session_id = s.id and profile_id = p.id;
+    return jsonb_build_object('result', 'already', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title);
+  end if;
+  return jsonb_build_object('result', 'ok', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title);
+end $$;
+
+-- ประวัติการเข้าเรียนของนักเรียน
+create or replace function public.api_att_history(p_line_user_id text)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare p profiles; v_rows jsonb;
+begin
+  p := qz_student(p_line_user_id);
+  select coalesce(jsonb_agg(x.j order by x.opens_at desc), '[]'::jsonb) into v_rows
+  from (
+    select s.opens_at, jsonb_build_object(
+      'id', s.id, 'title', s.title, 'opens_at', s.opens_at, 'closes_at', s.closes_at,
+      'session_status', case when now() < s.closes_at then 'open' else 'closed' end,
+      'status', r.status, 'checked_at', r.checked_at) as j
+    from att_sessions s
+    cross join lateral (select * from qz_att_roster(s.id) q where q.profile_id = p.id) r
+    order by s.opens_at desc
+    limit 200
+  ) x;
+  return jsonb_build_object(
+    'rows', v_rows,
+    'summary', (select jsonb_build_object(
+        'present', count(*) filter (where e->>'status' = 'present'),
+        'late', count(*) filter (where e->>'status' = 'late'),
+        'absent', count(*) filter (where e->>'status' = 'absent'),
+        'leave', count(*) filter (where e->>'status' = 'leave'))
+      from jsonb_array_elements(v_rows) e));
+end $$;
+
+-- ข้อมูลสรุปทุกคาบ (ใช้ทำตาราง Excel นักเรียน × คาบ)
+create or replace function public.api_att_report(p_line_user_id text)
+returns jsonb language plpgsql stable set search_path = public as $$
+begin
+  perform qz_teacher(p_line_user_id);
+  return jsonb_build_object(
+    'sessions', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'title', s.title, 'opens_at', s.opens_at) order by s.opens_at)
+                          from att_sessions s), '[]'::jsonb),
+    'students', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'student_code', p.student_code, 'full_name', coalesce(p.full_name, p.display_name))
+                                           order by p.student_code nulls last, p.full_name)
+                          from profiles p
+                          where (p.role = 'student' and p.full_name is not null)
+                             or exists (select 1 from att_records r where r.profile_id = p.id)), '[]'::jsonb),
+    'cells', coalesce((select jsonb_agg(jsonb_build_object('session_id', s.id, 'profile_id', r.profile_id, 'status', r.status))
+                       from att_sessions s cross join lateral qz_att_roster(s.id) r), '[]'::jsonb));
+end $$;
+
+-- =========================================================
 -- สิทธิ์: ฟังก์ชัน api_* และ qz_* เรียกได้เฉพาะ service_role (Edge Function)
 -- =========================================================
 do $$
