@@ -1,47 +1,69 @@
 # คู่มือติดตั้ง Quizzy Lite (ทีละขั้น)
 
-คู่มือนี้เขียนสำหรับครูที่ไม่เคยเขียนโปรแกรม ทำตามทีละข้อได้เลยครับ
+คู่มือนี้เขียนสำหรับครูที่ไม่เคยเขียนโปรแกรม ไม่ต้องใช้ GitHub หรือพิมพ์คำสั่งใด ๆ ทำตามทีละข้อได้เลยครับ
 
 > **ลองก่อนได้ทันที:** ยังไม่ต้องตั้งค่าอะไร เปิด `index.html` (นักเรียน) หรือ `teacher.html` (ครู) จะเข้า **โหมดทดลอง** ที่ใช้ข้อมูลจำลองในเครื่อง
 
-สิ่งที่ต้องมี: บัญชี LINE, บัญชี GitHub, อีเมลสำหรับสมัคร Vercel และ Supabase (ใช้แพ็กเกจฟรีได้ทั้งหมด)
+สิ่งที่ต้องมี: บัญชี LINE และอีเมลสำหรับสมัคร Supabase และ Netlify (ใช้แพ็กเกจฟรีได้ทั้งหมด)
 
-หน้าเว็บของ LINE, Vercel และ Supabase อาจเปลี่ยนชื่อเมนูหรือตำแหน่งปุ่มได้ ถ้าหาไม่เจอให้มองหาคำที่ใกล้เคียงครับ
+ภาพรวม: Supabase เก็บข้อมูลและตรวจตัวตน (ฐานข้อมูล + Edge Function `api`) ส่วน Netlify แค่เปิดหน้าเว็บ
 
----
+หน้าเว็บของ LINE, Netlify และ Supabase อาจเปลี่ยนชื่อเมนูหรือตำแหน่งปุ่มได้ ถ้าหาไม่เจอให้มองหาคำที่ใกล้เคียงครับ
 
-## ขั้นที่ 1: เอาโค้ดขึ้น GitHub
+**ระหว่างทำ ให้จดค่าเหล่านี้ไว้ในที่เดียวกัน** จะได้ใช้ต่อได้ง่าย
 
-ถ้าโค้ดอยู่ใน GitHub แล้ว ข้ามขั้นนี้ได้
-
-1. สร้าง repository ใหม่ใน GitHub (เช่นชื่อ `quizzy`)
-2. ในโฟลเดอร์โปรเจกต์ รันคำสั่ง (เปลี่ยน URL เป็นของตัวเอง)
-
-```bash
-git remote add origin https://github.com/<ชื่อผู้ใช้>/quizzy.git
-```
-
-```bash
-git push -u origin main
-```
+| ค่า | ได้จากขั้นที่ |
+|---|---|
+| Project URL และ Publishable key ของ Supabase | 2 |
+| URL ของเว็บ (Netlify) | 3 |
+| Channel ID, LIFF ID และ LIFF URL | 4 |
+| URL ของ Edge Function `api` | 5 |
 
 ---
 
-## ขั้นที่ 2: เปิดเว็บด้วย Vercel
+## ขั้นที่ 1: ดาวน์โหลดโค้ดแล้วแตกไฟล์
 
-1. ไปที่ https://vercel.com แล้วสมัครด้วยบัญชี GitHub
-2. กด **Add New… → Project** แล้วเลือก repository `quizzy` กด **Import**
-3. Framework Preset เลือก **Other** ไม่ต้องตั้งค่า Build อะไรเพิ่ม กด **Deploy**
-4. เสร็จแล้วจะได้ URL เช่น `https://quizzy-xxxx.vercel.app` **จดไว้**
-5. เปิด URL นั้นในเบราว์เซอร์ ควรเห็นหน้าต้อนรับน้องแต่ว (โหมดทดลอง)
-
-ทุกครั้งที่ push โค้ดใหม่ขึ้น GitHub, Vercel จะอัปเดตเว็บให้อัตโนมัติ
-
-> **อยากใช้ Netlify แทน Vercel?** ทำได้ ดู [ภาคผนวก: ใช้ Netlify แทน Vercel](#ภาคผนวก-ใช้-netlify-แทน-vercel) ท้ายคู่มือ แล้วใช้ URL ของ Netlify แทน URL ของ Vercel ในทุกขั้น
+1. ดาวน์โหลดไฟล์ zip ของ Quizzy (ถ้าโหลดจาก GitHub: กดปุ่ม **Code → Download ZIP**)
+2. คลิกขวาที่ไฟล์ zip → **Extract All** (แตกไฟล์ทั้งหมด)
+3. จะได้โฟลเดอร์ เช่น `quizzy-main` ข้างในต้องเห็นไฟล์ `index.html`, `teacher.html` และโฟลเดอร์ `js`, `supabase`
+   - ต่อไปในคู่มือนี้จะเรียกโฟลเดอร์นี้ว่า **โฟลเดอร์โปรเจกต์**
+   - ถ้าแตกแล้วได้โฟลเดอร์ซ้อนกันสองชั้น ให้ใช้ชั้นที่มี `index.html` อยู่ข้างใน
 
 ---
 
-## ขั้นที่ 3: สร้างแอปใน LINE Developers
+## ขั้นที่ 2: สร้างฐานข้อมูลด้วย Supabase
+
+1. ไปที่ https://supabase.com กด **Start your project** แล้วสมัคร
+2. กด **New project**
+   - Name: `quizzy`
+   - Database Password: ตั้งรหัสผ่านแล้ว **จดเก็บไว้ในที่ปลอดภัย**
+   - Region: **Southeast Asia (Singapore)** (ใกล้ไทยที่สุด)
+   - กด **Create new project** แล้วรอประมาณ 2 นาที
+3. เมนูซ้าย **SQL Editor** → **New query**
+   - เปิดไฟล์ `supabase/schema.sql` ในโฟลเดอร์โปรเจกต์ด้วย Notepad คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Run**
+   - ควรขึ้น `Success. No rows returned`
+   - ทุกครั้งที่ได้โค้ดเวอร์ชันใหม่ ให้รันไฟล์นี้ซ้ำได้เลย ข้อมูลเดิมไม่หาย
+4. **Project Settings → API Keys** จด **Project URL** (เช่น `https://abcdxyz.supabase.co`) และ **Publishable key** (`sb_publishable_...` ถ้าไม่มีให้ใช้ `anon` `public` key)
+   - **ห้าม**ใช้ `secret` key หรือ `service_role` key ในหน้าเว็บเด็ดขาด
+
+---
+
+## ขั้นที่ 3: เปิดเว็บด้วย Netlify (ลากโฟลเดอร์)
+
+1. ไปที่ https://app.netlify.com แล้วสมัคร (ใช้อีเมลได้)
+2. กด **Add new project** (หรือ Add new site) → **Deploy manually**
+3. ลาก **โฟลเดอร์โปรเจกต์** ทั้งโฟลเดอร์ (ที่มี `index.html` อยู่ข้างใน) ไปวางในกรอบบนหน้าเว็บ รอจนขึ้นว่า Published
+4. (แนะนำ) **Project configuration → Change project name** ตั้งชื่อที่จำง่าย เช่น `quizzy-banna`
+   - **ต้องเปลี่ยนชื่อตอนนี้** ก่อนทำขั้นที่ 4 เพราะเปลี่ยนชื่อแล้ว URL จะเปลี่ยนตาม
+5. จด URL ของเว็บ เช่น `https://quizzy-banna.netlify.app`
+6. เปิด URL นั้นในเบราว์เซอร์ ควรเห็นหน้าต้อนรับน้องแต่ว (ยังเป็นโหมดทดลอง)
+
+> ตอนแก้ไฟล์แล้วลากขึ้นใหม่ ให้เข้า project **เดิม** → แท็บ **Deploys** แล้วลากโฟลเดอร์ลงกรอบ drag and drop ในหน้านั้น
+> **อย่า**กด Add new project ใหม่ เพราะจะได้ URL ใหม่ที่ไม่ตรงกับ LINE
+
+---
+
+## ขั้นที่ 4: สร้างแอปใน LINE Developers
 
 1. ไปที่ https://developers.line.biz/console/ แล้ว login ด้วยบัญชี LINE
 2. กด **Create a new provider** ตั้งชื่อ เช่น ชื่อโรงเรียน
@@ -55,7 +77,7 @@ git push -u origin main
 5. แท็บ **LIFF** กด **Add**
    - LIFF app name: `Quizzy`
    - Size: **Full**
-   - Endpoint URL: URL จาก Vercel เช่น `https://quizzy-xxxx.vercel.app/` (**ต้องเป็นหน้าแรกของโดเมน** เพื่อให้หน้าครูใช้ LIFF ตัวเดียวกันได้)
+   - Endpoint URL: URL จาก Netlify เช่น `https://quizzy-banna.netlify.app/` (**ต้องเป็นหน้าแรกของโดเมน** เพื่อให้หน้าครูใช้ LIFF ตัวเดียวกันได้)
    - Scopes: ติ๊ก **openid** และ **profile**
    - Bot link feature: **Off** (หรือ On ถ้าจะผูกกับ LINE OA)
    - กด **Add** แล้วจด **LIFF ID** (หน้าตาแบบ `2001234567-AbCdEfGh`) และ **LIFF URL** (`https://liff.line.me/...`)
@@ -65,62 +87,49 @@ git push -u origin main
 
 ---
 
-## ขั้นที่ 4: ใส่ LIFF ID ในโค้ด
+## ขั้นที่ 5: สร้าง Edge Function ชื่อ `api` ใน Supabase
 
-1. เปิดไฟล์ `js/config.js`
-2. ใส่ LIFF ID ที่ได้จากขั้นที่ 3
+Edge Function คือตัวกลางที่ตรวจว่าผู้ใช้เป็นใครจริง ๆ (ตรวจ LINE token) ก่อนให้อ่าน/เขียนฐานข้อมูล
 
-```js
-LIFF_ID: '2001234567-AbCdEfGh',
-```
+1. กลับไปที่ Supabase เมนูซ้าย **Edge Functions** → **Deploy a new function** → **Via Editor**
+2. ตั้งชื่อ function ว่า `api` (ตัวพิมพ์เล็ก)
+3. ลบโค้ดตัวอย่างออกให้หมด เปิดไฟล์ `supabase/functions/api/index.ts` ในโฟลเดอร์โปรเจกต์ด้วย Notepad คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Deploy**
+4. เข้าไปที่ function `api` → แท็บ **Details** (หรือ Settings) → **ปิด** ตัวเลือก **Verify JWT** (Enforce JWT verification) แล้วกด Save
+   - ต้องปิด เพราะระบบตรวจตัวตนด้วย LINE token เอง
+5. ไปที่ **Edge Functions → Secrets** (หรือ Project Settings → Edge Functions) → **Add new secret**
+   - Name: `LINE_CHANNEL_ID`
+   - Value: Channel ID ที่จดไว้ในขั้นที่ 4
+6. กลับไปที่ function `api` จด **URL** ของ function เช่น `https://abcdxyz.supabase.co/functions/v1/api`
 
-3. บันทึกไฟล์ไว้ก่อน แล้วทำขั้นที่ 5–7 ต่อ (พอใส่ `LIFF_ID` แล้ว push ระบบจะออกจากโหมดทดลอง จึงควรทำขั้นที่ 5–6 ให้เสร็จก่อน push)
-4. เมื่อตั้งค่าครบแล้ว ส่ง **LIFF URL** เข้าแชต LINE ของตัวเอง แล้วกดเปิดบนมือถือ ควรเห็นชื่อและรูปโปรไฟล์ LINE ของคุณในหน้าลงทะเบียน
-
-ถ้าอยากดูโหมดทดลองหลังตั้งค่าครบแล้ว ให้เติม `?demo` ท้าย URL เช่น `https://quizzy-xxxx.vercel.app/?demo`
+ทุกครั้งที่โค้ดใน `index.ts` เปลี่ยน ให้วางโค้ดใหม่แล้วกด Deploy อีกครั้ง
 
 ---
 
-## ขั้นที่ 5: สร้างฐานข้อมูลด้วย Supabase
+## ขั้นที่ 6: ใส่ค่าใน `js/config.js` แล้วลากขึ้น Netlify อีกครั้ง
 
-1. ไปที่ https://supabase.com กด **Start your project** แล้วสมัคร (ใช้บัญชี GitHub ได้)
-2. กด **New project**
-   - Name: `quizzy`
-   - Database Password: ตั้งรหัสผ่านแล้ว **จดเก็บไว้ในที่ปลอดภัย**
-   - Region: **Southeast Asia (Singapore)** (ใกล้ไทยที่สุด)
-   - กด **Create new project** แล้วรอประมาณ 2 นาที
-3. เมนูซ้าย **SQL Editor** → **New query**
-   - เปิดไฟล์ `supabase/schema.sql` คัดลอก **ทั้งไฟล์** มาวาง แล้วกด **Run**
-   - ควรขึ้น `Success. No rows returned`
-   - ทุกครั้งที่ได้โค้ดเวอร์ชันใหม่ ให้รันไฟล์นี้ซ้ำได้เลย ข้อมูลเดิมไม่หาย
+1. ในโฟลเดอร์โปรเจกต์ คลิกขวาที่ไฟล์ `js/config.js` → **Open with → Notepad**
+2. ใส่ค่าที่จดไว้ระหว่างเครื่องหมาย `' '` ให้ครบ 4 ช่อง
 
-## ขั้นที่ 6: ใส่ค่าลับใน Vercel (Environment Variables)
+```js
+LIFF_ID: '2001234567-AbCdEfGh',
+API_URL: 'https://abcdxyz.supabase.co/functions/v1/api',
+SUPABASE_URL: 'https://abcdxyz.supabase.co',
+SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
+```
 
-ระบบมี server ตัวเดียวคือไฟล์ `api/index.js` ซึ่ง Vercel เปิดให้อัตโนมัติที่ `https://quizzy-xxxx.vercel.app/api` ไม่ต้องสร้าง function ใน Supabase
+   - `SUPABASE_URL` กับ `SUPABASE_PUBLISHABLE_KEY` ใช้สำหรับให้ครู login ด้วยอีเมล ถ้าครูจะใช้ LINE อย่างเดียวเว้นว่างได้
+   - **ห้าม**ใส่ `secret` key หรือ `service_role` key ในไฟล์นี้เด็ดขาด
+3. กด **Save** (Ctrl+S)
+4. Netlify → project เดิม → แท็บ **Deploys** → ลาก**โฟลเดอร์โปรเจกต์**ลงกรอบ drag and drop อีกครั้ง
+5. ส่ง **LIFF URL** เข้าแชต LINE ของตัวเอง แล้วกดเปิดบนมือถือ ควรเห็นชื่อและรูปโปรไฟล์ LINE ของคุณในหน้าลงทะเบียน
 
-1. หาค่า 3 ตัวนี้มาก่อน
-   - **LINE_CHANNEL_ID**: Channel ID จากขั้นที่ 3
-   - **SUPABASE_URL**: Supabase → **Project Settings → API Keys** → Project URL เช่น `https://abcdxyz.supabase.co`
-   - **SUPABASE_SERVICE_ROLE_KEY**: หน้าเดียวกัน → **Secret keys** → คัดลอก key `sb_secret_...` (ถ้าไม่มี ใช้ `service_role` key ในแท็บ Legacy)
-2. เปิดไฟล์ `.env.example` ในโฟลเดอร์โปรเจกต์ คัดลอกเป็นไฟล์ชื่อ `.env` แล้วกรอกค่าหลังเครื่องหมาย `=` ให้ครบ
-   - ไฟล์ `.env` ถูกกันไว้ไม่ให้ขึ้น GitHub แล้ว **ห้ามใส่ค่าจริงในไฟล์ `.env.example`**
-3. Vercel → เลือกโปรเจกต์ → **Settings → Environment Variables**
-   - กด **Import .env** แล้วเลือกไฟล์ `.env` (หรือคัดลอกเนื้อหาทั้งไฟล์ไปวางในช่อง Key ระบบจะแยกให้เอง)
-   - Environments: **Production and Preview**
-   - ที่ `SUPABASE_SERVICE_ROLE_KEY` เปิด **Sensitive** (ไอคอนแม่กุญแจ) ไว้ แล้วกด **Save**
-4. ไปที่แท็บ **Deployments** → กด **⋯** ที่รายการล่าสุด → **Redeploy** (ค่าที่เพิ่มใหม่จะใช้ได้หลัง deploy ใหม่เท่านั้น)
+เมื่อใส่ทั้ง `LIFF_ID` และ `API_URL` แล้ว ระบบจะออกจากโหมดทดลองและใช้ข้อมูลจริงทันที ถ้าอยากดูโหมดทดลองอีก ให้เติม `?demo` ท้าย URL เช่น `https://quizzy-banna.netlify.app/?demo`
 
-> secret key ใช้ได้เฉพาะใน Vercel เท่านั้น **ห้าม**ใส่ใน `js/config.js` หรือไฟล์ใดที่ขึ้น GitHub
+> **เก็บไฟล์ `js/config.js` ที่ใส่ค่าแล้วไว้ให้ดี** เวลาได้โค้ดเวอร์ชันใหม่ ให้คัดลอกไฟล์นี้ไปทับในโฟลเดอร์ใหม่ก่อนลากขึ้น Netlify
 
-## ขั้นที่ 7: push โค้ดแล้วตรวจ api
+---
 
-1. commit และ push `js/config.js` ที่ใส่ `LIFF_ID` แล้วขึ้น GitHub รอ Vercel อัปเดต
-2. `API_URL` ใน `js/config.js` ตั้งเป็น `'/api'` ไว้แล้ว ไม่ต้องแก้
-3. ตรวจว่า api ทำงาน: เปิด `https://quizzy-xxxx.vercel.app/api` ในเบราว์เซอร์ ควรเห็น `{"ok":false,"error":"method_not_allowed"}` (แปลว่า server ทำงานแล้ว ถ้าขึ้น 404 แปลว่า api ยังไม่ขึ้น)
-
-ไฟล์ `vercel.json` ตั้งให้ api รันที่สิงคโปร์ (`sin1`) ใกล้ Supabase จะได้ตอบเร็ว ถ้าสร้าง Supabase ไว้ region อื่นให้แก้ให้ตรงกัน
-
-## ขั้นที่ 8: สร้างบัญชีครู
+## ขั้นที่ 7: สร้างบัญชีครู
 
 หน้าครู (`teacher.html`) เข้าได้ 2 วิธี เลือกวิธีใดวิธีหนึ่งหรือใช้ทั้งสองแบบก็ได้
 
@@ -129,36 +138,28 @@ LIFF_ID: '2001234567-AbCdEfGh',
 | **A. อีเมล + รหัสผ่าน** (แนะนำ) | ครูใช้บนคอมพิวเตอร์ และตอนทดสอบ: ครูใช้บัญชีอีเมล นักเรียนใช้ LINE แยกกัน ไม่ชนกัน |
 | **B. LINE** | ไม่อยากสร้างบัญชีเพิ่ม แต่ LINE หนึ่งบัญชีเป็นได้แค่ครูหรือนักเรียนอย่างใดอย่างหนึ่ง |
 
-ไม่ว่าวิธีไหน บัญชีใหม่ทุกบัญชีเริ่มเป็น**นักเรียน**เสมอ ต้องตั้งเป็นครูใน Supabase ก่อน (ข้อ 8.3) ระบบจึงปลอดภัยแม้มีคนอื่นได้บัญชีไป
+ระบบไม่มีบัญชี admin แยก บัญชีใหม่ทุกบัญชีเริ่มเป็น**นักเรียน**เสมอ ต้อง login หน้าครู 1 ครั้งก่อน แล้วจึงตั้งเป็นครูใน Supabase (ข้อ 7.3) ระบบจึงปลอดภัยแม้มีคนอื่นได้บัญชีไป
 
-### 8.1 วิธี A: สร้างบัญชีครูแบบอีเมล
+### 7.1 วิธี A: สร้างบัญชีครูแบบอีเมล
 
 1. Supabase → **Authentication → Users → Add user → Create new user**
    - ใส่อีเมลและรหัสผ่านของครู ติ๊ก **Auto Confirm User** แล้วกด Create
    - สร้างกี่บัญชีก็ได้ เช่น `kru.somsri@school.ac.th`, `test.teacher@school.ac.th`
 2. **ปิดการสมัครเอง (แนะนำ):** Authentication → **Sign In / Providers** (หรือ Providers → Email) → ปิด **Allow new users to sign up** แล้วกด Save
    - เพื่อให้มีแค่บัญชีที่ผู้ดูแลสร้างเท่านั้น
-3. Supabase → **Project Settings → API Keys** คัดลอก **Project URL** และ **Publishable key** (ถ้าไม่มีให้ใช้ `anon` `public` key) ใส่ใน `js/config.js`
-
-```js
-SUPABASE_URL: 'https://abcdxyz.supabase.co',
-SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
-```
-
-   > **ห้าม**ใส่ `secret` key หรือ `service_role` key ในไฟล์นี้เด็ดขาด
-
-4. commit และ push แล้วเปิด `https://quizzy-xxxx.vercel.app/teacher.html` จะเห็นช่องอีเมลและรหัสผ่าน
+3. ตรวจว่าใส่ `SUPABASE_URL` และ `SUPABASE_PUBLISHABLE_KEY` ใน `js/config.js` แล้ว (ขั้นที่ 6)
+4. เปิด `https://quizzy-banna.netlify.app/teacher.html` จะเห็นช่องอีเมลและรหัสผ่าน
 5. ถ้าครูลืมรหัสผ่าน ผู้ดูแลตั้งใหม่ได้ที่ Authentication → Users → เลือกบัญชี
 
-### 8.2 วิธี B: ใช้บัญชี LINE
+### 7.2 วิธี B: ใช้บัญชี LINE
 
 บนคอมพิวเตอร์ เปิด `teacher.html` แล้วกด **เข้าสู่ระบบด้วย LINE**
 
 > ถ้าใช้วิธีนี้ ครูไม่ควรลงทะเบียนเป็นนักเรียนในหน้า LINE Mini App ด้วยบัญชีเดียวกัน
 
-### 8.3 ตั้งบัญชีเป็นครู (ทำครั้งเดียวต่อบัญชี)
+### 7.3 ตั้งบัญชีเป็นครู (ทำครั้งเดียวต่อบัญชี)
 
-1. Login หน้าครูครั้งแรก จะขึ้นว่า **"หน้านี้สำหรับครูเท่านั้น"**
+1. Login หน้าครูครั้งแรก จะขึ้นว่า **"หน้านี้สำหรับครูเท่านั้น"** (ถูกต้องแล้ว เพราะยังเป็นนักเรียนอยู่)
 2. Supabase → **Table Editor** → ตาราง **profiles** → หาแถวที่ `display_name` เป็นอีเมลของครู (วิธี A) หรือชื่อ LINE (วิธี B)
 3. ดับเบิลคลิกช่อง `role` เปลี่ยนเป็น `teacher` แล้วกด Save
 4. กลับมาหน้าครู กด **ตั้งค่าแล้ว โหลดใหม่** แล้วตั้งชื่อครู
@@ -177,19 +178,21 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 
 | อาการ | สาเหตุ / วิธีแก้ |
 |---|---|
-| ขึ้น "ยังไม่ได้ตั้งค่า ... ใน Vercel" | ยังไม่ได้ใส่ Environment Variables ในขั้นที่ 6 หรือใส่แล้วแต่ยังไม่ได้ Redeploy |
-| เปิดแอปแล้ว login วนไม่จบ | `LINE_CHANNEL_ID` ใน Vercel ไม่ตรงกับ channel ที่มี LIFF นี้ |
-| ขึ้น "เกิดข้อผิดพลาด" ทุกหน้า และเปิด `/api` แล้วขึ้น 404 | ไฟล์ `api/index.js` หรือ `package.json` ไม่ได้ขึ้น GitHub ตรวจว่า push ครบ |
-| ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ หรือ secret key ผิด ดู log ได้ที่ Vercel → โปรเจกต์ → **Logs** |
+| ขึ้น "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID" | ยังไม่ได้เพิ่ม secret ในขั้นที่ 5 ข้อ 5 |
+| เปิดแอปแล้ว login วนไม่จบ | Channel ID ใน secret ไม่ตรงกับ channel ที่มี LIFF นี้ |
+| ขึ้น "เชื่อมต่ออินเทอร์เน็ตไม่ได้" ทั้งที่เน็ตปกติ | `API_URL` ผิด หรือยังไม่ได้ปิด Verify JWT |
+| ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ ดู log ได้ที่ Edge Functions → api → Logs |
+| แก้ `config.js` แล้วแต่เว็บยังเป็นโหมดทดลอง | ยังไม่ได้ลากโฟลเดอร์ขึ้น Netlify ใหม่ หรือลากไปผิด project ดูขั้นที่ 6 ข้อ 4 |
+| เปิด LIFF แล้วขึ้นหน้าว่างหรือ 404 | Endpoint URL ใน LIFF ไม่ตรงกับ URL ของ Netlify (เช่น เปลี่ยนชื่อ project หลังสร้าง LIFF) |
 
 ---
 
 ## เมื่อได้โค้ดเวอร์ชันใหม่ (เช่น จบแต่ละ Phase)
 
 1. รัน `supabase/schema.sql` ทั้งไฟล์ใน SQL Editor อีกครั้ง (ข้อมูลเดิมไม่หาย)
-2. push โค้ดขึ้น GitHub ให้ Vercel อัปเดตทั้งหน้าเว็บและ api
-
-> ถ้าเคยติดตั้งเวอร์ชันที่ใช้ Supabase Edge Function มาก่อน: ทำขั้นที่ 6 ให้เสร็จ แล้วลบ function `api` ใน Supabase → Edge Functions ทิ้งได้เลย
+2. วางโค้ด `supabase/functions/api/index.ts` ใหม่ใน Edge Function `api` แล้วกด Deploy
+3. คัดลอก `js/config.js` ที่ใส่ค่าไว้แล้วจากโฟลเดอร์เก่า ไปทับในโฟลเดอร์ใหม่
+4. ลากโฟลเดอร์ใหม่ลง Netlify → project เดิม → แท็บ **Deploys**
 
 ### ตรวจว่า Phase 2 ใช้ได้ (ครูสร้างชุดสอบ)
 
@@ -218,7 +221,7 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 
 ---
 
-## ขั้นที่ 9: เพิ่มปุ่ม "ทำข้อสอบ" ในเมนูของ LINE OA (Rich Menu)
+## ขั้นที่ 8: เพิ่มปุ่ม "ทำข้อสอบ" ในเมนูของ LINE OA (Rich Menu)
 
 ทำผ่านหน้าเว็บของ LINE ได้ทั้งหมด ไม่ต้องเขียนโค้ด
 
@@ -236,23 +239,3 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 ### ตรวจว่าใช้ได้
 
 - [ ] กดเมนูใน LINE OA แล้วเปิด Quizzy ในแอป LINE ได้
-
----
-
-## ภาคผนวก: ใช้ Netlify แทน Vercel
-
-โค้ดชุดเดียวกัน deploy บน Netlify ได้เลย ไฟล์ `netlify.toml` กับ `netlify/functions/api.js` ตั้งค่าไว้ให้แล้ว api จะเปิดที่ `/api` เหมือนกัน จึงไม่ต้องแก้ `js/config.js`
-
-1. ไปที่ https://app.netlify.com แล้วสมัครด้วยบัญชี GitHub
-2. กด **Add new site → Import an existing project → GitHub** แล้วเลือก repository `quizzy`
-3. หน้าตั้งค่า build ไม่ต้องแก้อะไร (Netlify อ่านจาก `netlify.toml` เอง) กด **Deploy**
-   - จะได้ URL เช่น `https://quizzy-xxxx.netlify.app` ใช้ URL นี้เป็น **Endpoint URL** ของ LIFF ในขั้นที่ 3
-4. ใส่ค่าลับ (แทนขั้นที่ 6 ของ Vercel): **Site configuration → Environment variables → Add a variable → Import from a .env file**
-   - วางเนื้อหาทั้งไฟล์ `.env` ที่กรอกแล้ว (ดูวิธีกรอกในขั้นที่ 6 ข้อ 1–2) แล้วกด Import
-   - `SUPABASE_SERVICE_ROLE_KEY` ติ๊ก **Contains secret values** ถ้ามีตัวเลือกนี้
-5. **Deploys → Trigger deploy → Deploy site** หนึ่งครั้ง เพื่อให้ api ใช้ค่าใหม่
-6. ตรวจว่า api ทำงาน: เปิด `https://quizzy-xxxx.netlify.app/api` ควรเห็น `{"ok":false,"error":"method_not_allowed"}`
-7. (แนะนำ) **Site configuration → Build & deploy → Functions → Functions region** ถ้าเลือกได้ ให้ตั้งเป็น **Asia Pacific (Singapore)** ใกล้ Supabase จะตอบเร็วขึ้น
-   - ถ้าแพ็กเกจที่ใช้เปลี่ยนไม่ได้ ระบบยังใช้ได้ แต่ช้าลงเล็กน้อยทุกครั้งที่เรียก api
-
-ดู log ของ api ได้ที่ **Logs → Functions → api** ส่วนไฟล์ `vercel.json` ไม่มีผลกับ Netlify ปล่อยไว้ได้

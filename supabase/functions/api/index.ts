@@ -1,5 +1,5 @@
 // =========================================================
-// Quizzy Lite: Vercel Function "api" (ตัวเดียวทั้งระบบ) เปิดที่ /api
+// Quizzy Lite: Edge Function "api" (ตัวเดียวทั้งระบบ)
 //
 // ขั้นตอนทุกคำขอ:
 // 1) รับ { action, provider, idToken, data } จากหน้าเว็บ
@@ -10,15 +10,18 @@
 //    (LINE ใช้ LINE user ID, อีเมลใช้ "auth:<user id>" เก็บในช่อง profiles.line_user_id)
 // 4) ส่งผลกลับเป็น { ok: true, data } หรือ { ok: false, error }
 //
-// ตั้งค่าใน Vercel > Project > Settings > Environment Variables (ดู .env.example และ docs/SETUP.md):
-// - LINE_CHANNEL_ID            Channel ID ของ LINE
-// - SUPABASE_URL               Project URL ของ Supabase
-// - SUPABASE_SERVICE_ROLE_KEY  Secret key (sb_secret_...) หรือ service_role key ของ Supabase
+// ตั้งค่าใน Supabase > Edge Functions > api:
+// - Secrets: LINE_CHANNEL_ID = Channel ID ของ LINE (ดู docs/SETUP.md)
+// - ปิด "Verify JWT" เพราะเราตรวจ LINE token เอง
+// (SUPABASE_URL และ SUPABASE_SERVICE_ROLE_KEY มีให้อัตโนมัติ)
 // =========================================================
+
+type Json = Record<string, unknown>;
+type LineUser = { sub: string; name?: string | null; picture?: string | null };
 
 // action ที่หน้าเว็บเรียกได้ → ชื่อฟังก์ชันในฐานข้อมูล + พารามิเตอร์
 // (รับเฉพาะ action ในรายการนี้เท่านั้น)
-const ACTIONS = {
+const ACTIONS: Record<string, { fn: string; args: (d: Json, u: LineUser) => Json }> = {
   // ---------- ผู้ใช้ ----------
   me: { fn: 'api_me', args: (_d, u) => ({ p_display_name: u.name ?? null, p_picture_url: u.picture ?? null }) },
   register: { fn: 'api_register', args: (d) => ({ p_full_name: d.full_name ?? null, p_student_code: d.student_code ?? null }) },
@@ -48,25 +51,16 @@ const CORS = {
 };
 
 class ApiError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(public status: number, message: string) { super(message); }
 }
 
-const env = (name) => process.env[name]?.trim() || '';
-
-const reply = (status, body) =>
+const reply = (status: number, body: Json) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-function supabaseEnv() {
-  const url = env('SUPABASE_URL').replace(/\/+$/, '');
-  const key = env('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !key) throw new ApiError(500, 'ยังไม่ได้ตั้งค่า SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ใน Vercel');
-  return { url, key };
-}
-
 // ตรวจ LINE ID token: https://developers.line.biz/en/reference/line-login/#verify-id-token
-export async function verifyLine(idToken) {
-  const channelId = env('LINE_CHANNEL_ID');
-  if (!channelId) throw new ApiError(500, 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID ใน Vercel');
+export async function verifyLine(idToken: string): Promise<LineUser> {
+  const channelId = Deno.env.get('LINE_CHANNEL_ID');
+  if (!channelId) throw new ApiError(500, 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ID ใน Supabase');
   const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -79,8 +73,10 @@ export async function verifyLine(idToken) {
 }
 
 // ตรวจ access token ของ Supabase Auth (ครูที่ login ด้วยอีเมล)
-export async function verifyEmail(accessToken) {
-  const { url, key } = supabaseEnv();
+export async function verifyEmail(accessToken: string): Promise<LineUser> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) throw new ApiError(500, 'ไม่พบการตั้งค่า Supabase');
   const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key, Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) throw new ApiError(401, 'invalid_token');
   const user = await res.json();
@@ -89,9 +85,11 @@ export async function verifyEmail(accessToken) {
 }
 
 // เรียกฟังก์ชันในฐานข้อมูลผ่าน REST (PostgREST)
-export async function callRpc(fn, params) {
-  const { url, key } = supabaseEnv();
-  const headers = { apikey: key, 'Content-Type': 'application/json' };
+export async function callRpc(fn: string, params: Json): Promise<unknown> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) throw new ApiError(500, 'ไม่พบการตั้งค่า Supabase');
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' };
   if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`; // key แบบเก่า (JWT)
 
   const res = await fetch(`${url}/rest/v1/rpc/${fn}`, { method: 'POST', headers, body: JSON.stringify(params) });
@@ -106,7 +104,7 @@ export async function callRpc(fn, params) {
   throw new ApiError(500, 'เกิดข้อผิดพลาดในระบบ ลองใหม่อีกครั้งนะครับ');
 }
 
-export async function handle(req, deps = { verifyLine, verifyEmail, callRpc }) {
+export async function handle(req: Request, deps = { verifyLine, verifyEmail, callRpc }): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'method_not_allowed' });
 
@@ -116,11 +114,11 @@ export async function handle(req, deps = { verifyLine, verifyEmail, callRpc }) {
     const def = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : undefined;
     if (!def) throw new ApiError(400, 'ไม่รู้จักคำสั่งนี้');
     if (typeof body.idToken !== 'string' || !body.idToken) throw new ApiError(401, 'invalid_token');
-    const data = body.data && typeof body.data === 'object' ? body.data : {};
+    const data: Json = body.data && typeof body.data === 'object' ? body.data : {};
 
     const user = body.provider === 'email' ? await deps.verifyEmail(body.idToken) : await deps.verifyLine(body.idToken);
     const result = await deps.callRpc(def.fn, { p_line_user_id: user.sub, ...def.args(data, user) });
-    return reply(200, { ok: true, data: result });
+    return reply(200, { ok: true, data: result as Json });
   } catch (err) {
     if (err instanceof ApiError) return reply(err.status, { ok: false, error: err.message });
     console.error(err);
@@ -128,7 +126,5 @@ export async function handle(req, deps = { verifyLine, verifyEmail, callRpc }) {
   }
 }
 
-// Vercel เรียกฟังก์ชันตามชื่อ HTTP method (Web Request / Response)
-export const POST = (req) => handle(req);
-export const OPTIONS = (req) => handle(req);
-export const GET = (req) => handle(req);
+// ตอนรันทดสอบ (QUIZZY_TEST=1) ไม่ต้องเปิด server
+if (!Deno.env.get('QUIZZY_TEST')) Deno.serve((req) => handle(req));
