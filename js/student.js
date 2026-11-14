@@ -2,11 +2,11 @@
 // หน้านักเรียน (index.html): LINE Mini App
 // =========================================================
 import { IS_DEMO } from './config.js';
-import { initLine } from './line.js';
+import { initLine, inLineApp, scanQr } from './line.js';
 import { api } from './api.js';
 import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
 import { icon, leaf } from './icons.js';
-import { checkinFromUrl } from './qr.js';
+import { checkinFromUrl, codeFromScan } from './qr.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -481,6 +481,7 @@ const checkinFormHtml = () => `
     <b style="font-size:17px;color:var(--brown);text-align:center">กรอกรหัส 4 หลักจากจอของครู</b>
     <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" aria-label="รหัสเช็คชื่อ">
     <button class="btn btn-primary" type="submit">เช็คชื่อ</button>
+    ${inLineApp() ? `<button class="btn btn-secondary" type="button" data-act="scan-qr">${icon('qr')}สแกน QR บนจอครู</button>` : ''}
   </form>`;
 
 function bindCheckinForm() {
@@ -497,10 +498,26 @@ function bindCheckinForm() {
   });
 }
 
+// สแกน QR ด้วยกล้องในแอป LINE แล้วเช็คชื่อทันที
+async function scanAndCheckIn() {
+  try {
+    const text = await scanQr();
+    if (!text) return; // กดยกเลิก
+    const code = codeFromScan(text);
+    if (!code) return toast('QR นี้ไม่ใช่ QR เช็คชื่อของ Quizzy', 'error');
+    const form = document.getElementById('att-form');
+    if (!form) return;
+    form.code.value = code;
+    checkIn(form);
+  } catch (err) {
+    toast(err.message || 'เปิดกล้องสแกนไม่สำเร็จ กรอกรหัสแทนได้', 'error');
+  }
+}
+
 async function checkIn(form) {
   const code = form.code.value;
   if (code.length !== 4) return toast('กรอกรหัสให้ครบ 4 หลัก', 'error');
-  const btn = form.querySelector('button');
+  const btn = form.querySelector('button[type=submit]');
   if (btn.disabled) return;
   btn.disabled = true;
   btn.textContent = 'กำลังเช็คชื่อ…';
@@ -595,6 +612,7 @@ app.addEventListener('click', (e) => {
     case 'grid': return openGrid();
     case 'finish': return confirmSubmit();
     case 'retry-submit': return submitExam();
+    case 'scan-qr': return scanAndCheckIn();
     case 'att-again':
       document.getElementById('att-box').innerHTML = checkinFormHtml();
       bindCheckinForm();

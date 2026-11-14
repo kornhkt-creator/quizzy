@@ -27,6 +27,20 @@ export function lineLogout() {
   if (!IS_DEMO && window.liff?.isLoggedIn?.()) liff.logout();
 }
 
+// ---------- สแกน QR ด้วยกล้องในแอป LINE ----------
+// มีเฉพาะตอนเปิดในแอป LINE (ไม่ใช่เบราว์เซอร์ทั่วไป)
+export const inLineApp = () => !IS_DEMO && !!window.liff?.isInClient?.();
+
+// คืนข้อความใน QR หรือ null ถ้ากดยกเลิก
+// ต้องเปิด "Scan QR" ในตั้งค่า LIFF ที่ LINE Developers ก่อน
+export async function scanQr() {
+  if (window.liff?.isApiAvailable && !liff.isApiAvailable('scanCodeV2')) {
+    throw new Error('ยังสแกนในแอปไม่ได้ (ผู้ดูแล: เปิด Scan QR ในตั้งค่า LIFF) ใช้กล้องมือถือสแกน หรือกรอกรหัสแทนได้');
+  }
+  const { value } = await liff.scanCodeV2();
+  return value || null;
+}
+
 // ID token ใช้ยืนยันตัวตนกับ server (server จะตรวจกับ LINE อีกครั้ง)
 export function getIdToken() {
   return IS_DEMO ? 'demo' : liff.getIDToken();

@@ -24,6 +24,7 @@ const PATHS = {
   trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   up: '<path d="m6 15 6-6 6 6"/>',
+  qr: '<rect x="4" y="4" width="6" height="6" rx="1.2"/><rect x="14" y="4" width="6" height="6" rx="1.2"/><rect x="4" y="14" width="6" height="6" rx="1.2"/><path d="M14 14h2.5v2.5H14zM20 14v.01M14 20h.01M17.5 17.5H20V20h-2.5z"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
 };
 

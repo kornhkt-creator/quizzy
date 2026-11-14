@@ -39,9 +39,20 @@ export async function qrSvg(text) {
 // อ่านรหัสเช็คชื่อจาก URL ตอนเปิดแอป
 // LINE ส่งค่ามาได้ 2 แบบ: ?checkin=1234 หรือ ?liff.state=%3Fcheckin%3D1234 (ก่อน LIFF redirect)
 export function checkinFromUrl() {
-  const params = new URLSearchParams(location.search);
+  return codeFromSearch(location.search);
+}
+
+function codeFromSearch(search) {
+  const params = new URLSearchParams(search);
   let code = params.get('checkin');
   const state = params.get('liff.state');
   if (!code && state) code = new URLSearchParams(state.split('?')[1] || '').get('checkin');
   return /^\d{4}$/.test(code || '') ? code : null;
+}
+
+// ข้อความที่สแกนได้จาก QR → รหัสเช็คชื่อ (รับทั้งลิงก์เช็คชื่อ และตัวเลข 4 หลักล้วน)
+export function codeFromScan(text) {
+  const t = String(text ?? '').trim();
+  if (/^\d{4}$/.test(t)) return t;
+  try { return codeFromSearch(new URL(t).search); } catch { return null; }
 }
