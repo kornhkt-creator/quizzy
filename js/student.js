@@ -481,7 +481,7 @@ const checkinFormHtml = () => `
     <b style="font-size:17px;color:var(--brown);text-align:center">กรอกรหัส 4 หลักจากจอของครู</b>
     <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" aria-label="รหัสเช็คชื่อ">
     <button class="btn btn-primary" type="submit">เช็คชื่อ</button>
-    ${inLineApp() ? `<button class="btn btn-secondary" type="button" data-act="scan-qr">${icon('qr')}สแกน QR บนจอครู</button>` : ''}
+    <button class="btn btn-secondary" type="button" data-act="scan-qr">${icon('qr')}สแกน QR บนจอครู</button>
   </form>`;
 
 function bindCheckinForm() {
@@ -499,7 +499,12 @@ function bindCheckinForm() {
 }
 
 // สแกน QR ด้วยกล้องในแอป LINE แล้วเช็คชื่อทันที
+// ปุ่มขึ้นตลอด ถ้าสแกนไม่ได้ให้บอกเหตุผล (ไม่ซ่อนปุ่มเฉย ๆ)
 async function scanAndCheckIn() {
+  if (IS_DEMO) return toast('โหมดทดลองสแกน QR ไม่ได้ กรอกรหัส 4 หลักจากจอครูแทนได้', 'error');
+  if (!inLineApp()) {
+    return toast('ปุ่มสแกนใช้ได้เมื่อเปิด Quizzy ในแอป LINE บนมือถือ (ลิงก์ liff.line.me) · ตอนนี้ใช้กล้องมือถือสแกน QR หรือกรอกรหัสแทนได้', 'error');
+  }
   try {
     const text = await scanQr();
     if (!text) return; // กดยกเลิก

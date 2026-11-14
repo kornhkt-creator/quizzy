@@ -46,7 +46,7 @@ export function toast(message, type = '') {
   el.textContent = message;
   document.body.appendChild(el);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.remove(), 3200);
+  toastTimer = setTimeout(() => el.remove(), Math.max(3200, message.length * 60)); // ข้อความยาวอยู่นานขึ้น
 }
 
 // ---------- กล่องยืนยัน (คืนค่า true/false) ----------
