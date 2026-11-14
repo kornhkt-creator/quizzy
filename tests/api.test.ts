@@ -33,6 +33,14 @@ Deno.test('Vercel เรียก POST แล้วได้ผลแบบเ�
   assertEq(res.status, 400);
 });
 
+Deno.test('Netlify: เปิดที่ /api และใช้ handle ตัวเดียวกัน', async () => {
+  const netlify = await import('../netlify/functions/api.js');
+  assertEq(netlify.config, { path: '/api' });
+  const res = await netlify.default(post({ action: 'nope', idToken: 't' }));
+  assertEq(res.status, 400);
+  assertEq(await res.json(), { ok: false, error: 'ไม่รู้จักคำสั่งนี้' });
+});
+
 Deno.test('OPTIONS ตอบ CORS', async () => {
   const res = await handle(new Request('http://x/api', { method: 'OPTIONS' }));
   assertEq(res.status, 200);

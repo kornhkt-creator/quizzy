@@ -56,7 +56,7 @@ cd tests && npm install && npm test
 - HTML, CSS, Vanilla JavaScript (ES Modules) ไม่มี build step ไม่ใช้ npm
 - LINE LIFF SDK v2, ฟอนต์ Kanit, SheetJS (โหลดจาก CDN)
 - Supabase PostgreSQL (ไม่ใช้ Edge Function)
-- Vercel สำหรับเปิดเว็บ และรัน `api` เป็น Vercel Function ตัวเดียว
+- Vercel สำหรับเปิดเว็บ และรัน `api` เป็น Vercel Function ตัวเดียว (หรือใช้ Netlify แทนได้ ดูภาคผนวกใน SETUP.md)
 
 ## โครงสร้างโปรเจกต์
 
@@ -77,6 +77,7 @@ supabase/schema.sql   ตาราง + ฟังก์ชันในฐาน�
 api/index.js          server ตัวเดียวของระบบ (Vercel Function ที่ /api)
 .env.example          รายชื่อค่าลับสำหรับ Import .env ใน Vercel
 vercel.json           ให้ api รันที่สิงคโปร์ ใกล้ Supabase
+netlify.toml, netlify/functions/api.js   ใช้เมื่อ deploy บน Netlify แทน Vercel
 tests/                ชุดทดสอบสำหรับนักพัฒนา
 assets/mascot/        ภาพน้องแต่วท่าต่าง ๆ
 assets/reference/     ภาพอ้างอิงตัวละครและสไตล์ UI

@@ -37,6 +37,8 @@ git push -u origin main
 
 ทุกครั้งที่ push โค้ดใหม่ขึ้น GitHub, Vercel จะอัปเดตเว็บให้อัตโนมัติ
 
+> **อยากใช้ Netlify แทน Vercel?** ทำได้ ดู [ภาคผนวก: ใช้ Netlify แทน Vercel](#ภาคผนวก-ใช้-netlify-แทน-vercel) ท้ายคู่มือ แล้วใช้ URL ของ Netlify แทน URL ของ Vercel ในทุกขั้น
+
 ---
 
 ## ขั้นที่ 3: สร้างแอปใน LINE Developers
@@ -234,3 +236,23 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 ### ตรวจว่าใช้ได้
 
 - [ ] กดเมนูใน LINE OA แล้วเปิด Quizzy ในแอป LINE ได้
+
+---
+
+## ภาคผนวก: ใช้ Netlify แทน Vercel
+
+โค้ดชุดเดียวกัน deploy บน Netlify ได้เลย ไฟล์ `netlify.toml` กับ `netlify/functions/api.js` ตั้งค่าไว้ให้แล้ว api จะเปิดที่ `/api` เหมือนกัน จึงไม่ต้องแก้ `js/config.js`
+
+1. ไปที่ https://app.netlify.com แล้วสมัครด้วยบัญชี GitHub
+2. กด **Add new site → Import an existing project → GitHub** แล้วเลือก repository `quizzy`
+3. หน้าตั้งค่า build ไม่ต้องแก้อะไร (Netlify อ่านจาก `netlify.toml` เอง) กด **Deploy**
+   - จะได้ URL เช่น `https://quizzy-xxxx.netlify.app` ใช้ URL นี้เป็น **Endpoint URL** ของ LIFF ในขั้นที่ 3
+4. ใส่ค่าลับ (แทนขั้นที่ 6 ของ Vercel): **Site configuration → Environment variables → Add a variable → Import from a .env file**
+   - วางเนื้อหาทั้งไฟล์ `.env` ที่กรอกแล้ว (ดูวิธีกรอกในขั้นที่ 6 ข้อ 1–2) แล้วกด Import
+   - `SUPABASE_SERVICE_ROLE_KEY` ติ๊ก **Contains secret values** ถ้ามีตัวเลือกนี้
+5. **Deploys → Trigger deploy → Deploy site** หนึ่งครั้ง เพื่อให้ api ใช้ค่าใหม่
+6. ตรวจว่า api ทำงาน: เปิด `https://quizzy-xxxx.netlify.app/api` ควรเห็น `{"ok":false,"error":"method_not_allowed"}`
+7. (แนะนำ) **Site configuration → Build & deploy → Functions → Functions region** ถ้าเลือกได้ ให้ตั้งเป็น **Asia Pacific (Singapore)** ใกล้ Supabase จะตอบเร็วขึ้น
+   - ถ้าแพ็กเกจที่ใช้เปลี่ยนไม่ได้ ระบบยังใช้ได้ แต่ช้าลงเล็กน้อยทุกครั้งที่เรียก api
+
+ดู log ของ api ได้ที่ **Logs → Functions → api** ส่วนไฟล์ `vercel.json` ไม่มีผลกับ Netlify ปล่อยไว้ได้
