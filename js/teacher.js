@@ -610,11 +610,16 @@ function renderAtt() {
     </div>
     ${open ? `
       <div class="card att-code" id="att-code">
-        <div class="muted">รหัสเช็คชื่อ</div>
-        <div class="digits">${s.code.split('').map((d) => `<i>${d}</i>`).join('')}</div>
-        <div class="att-left" id="att-left">เหลือเวลา --:--</div>
-        <div class="att-count" id="att-count"></div>
-        <p class="muted">นักเรียนเปิด Quizzy ใน LINE → แท็บ <b>เช็คชื่อ</b> → กรอกรหัสนี้</p>
+        <div class="code-row">
+          <div class="att-qr" id="att-qr" aria-label="QR Code เช็คชื่อ"><div class="muted" style="font-size:13px">กำลังสร้าง QR…</div></div>
+          <div>
+            <div class="muted">สแกน QR หรือกรอกรหัส</div>
+            <div class="digits">${s.code.split('').map((d) => `<i>${d}</i>`).join('')}</div>
+            <div class="att-left" id="att-left">เหลือเวลา --:--</div>
+            <div class="att-count" id="att-count"></div>
+          </div>
+        </div>
+        <p class="muted">สแกน QR ด้วยกล้องมือถือหรือ LINE · หรือเปิด Quizzy ใน LINE → แท็บ <b>เช็คชื่อ</b> → กรอกรหัส</p>
         <button class="btn btn-secondary btn-sm" data-act="att-full">${icon('eye')}ขยายเต็มจอ (สำหรับโปรเจกเตอร์)</button>
       </div>` : ''}
     <div class="stats" id="att-stats">${attStatsHtml(s)}</div>
@@ -631,8 +636,20 @@ function renderAtt() {
     </div>`;
   stopAttTimer();
   if (open) {
+    showAttQr(s.code);
     attTick();
     state.attTimer = setInterval(attTick, 1000);
+  }
+}
+
+async function showAttQr(code) {
+  const box = document.getElementById('att-qr');
+  try {
+    const { qrSvg, checkinUrl } = await import('./qr.js');
+    const svg = await qrSvg(checkinUrl(code));
+    if (box.isConnected) box.innerHTML = svg;
+  } catch (err) {
+    if (box.isConnected) box.innerHTML = `<div class="muted" style="font-size:13px;padding:10px">${esc(err.message)}<br>ใช้รหัสตัวเลขแทนได้</div>`;
   }
 }
 

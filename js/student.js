@@ -6,6 +6,7 @@ import { initLine } from './line.js';
 import { api } from './api.js';
 import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
 import { icon, leaf } from './icons.js';
+import { checkinFromUrl } from './qr.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -17,14 +18,31 @@ const state = {
 };
 const LETTER = { A: 'ก', B: 'ข', C: 'ค', D: 'ง' };
 
+// ---------- รหัสจาก QR เช็คชื่อ ----------
+// เก็บไว้ก่อน (ให้รอดตอน login LINE / ลงทะเบียน) แล้วลบออกจาก URL กันเช็คซ้ำตอนรีเฟรช
+const PENDING = 'quizzy:checkin';
+function takeQrCode() {
+  const code = checkinFromUrl();
+  if (!code) return;
+  sessionStorage.setItem(PENDING, code);
+  const url = new URL(location.href);
+  if (url.searchParams.has('checkin')) {
+    url.searchParams.delete('checkin');
+    history.replaceState(null, '', url);
+  }
+}
+const firstTab = () => (sessionStorage.getItem(PENDING) ? 'checkin' : 'home');
+
 // ---------- เริ่มต้น ----------
 async function start() {
+  takeQrCode();
   app.innerHTML = loadingHtml('น้องแต่วกำลังมา');
   try {
     await initLine();
+    takeQrCode(); // หลัง LIFF แปลง liff.state กลับเป็น ?checkin=
     state.me = await api('me');
     if (!state.me.registered) renderRegister();
-    else showTab('home');
+    else showTab(firstTab());
   } catch (err) {
     renderError(err);
   }
@@ -83,7 +101,7 @@ function renderRegister() {
     try {
       state.me = await api('register', { full_name, student_code });
       toast('ลงทะเบียนเรียบร้อย ยินดีต้อนรับครับ!');
-      showTab('home');
+      showTab(firstTab());
     } catch (err) {
       toast(err.message, 'error');
       btn.disabled = false;
@@ -447,6 +465,14 @@ function renderCheckin() {
     ${tabbar()}`;
   bindCheckinForm();
   loadAttHistory();
+  // เปิดมาจาก QR: เช็คชื่อให้ทันที
+  const pending = sessionStorage.getItem(PENDING);
+  if (pending) {
+    sessionStorage.removeItem(PENDING);
+    const form = document.getElementById('att-form');
+    form.code.value = pending;
+    checkIn(form);
+  }
 }
 
 const checkinFormHtml = () => `

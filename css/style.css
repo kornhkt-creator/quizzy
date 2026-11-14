@@ -322,9 +322,14 @@ td.why { color: var(--red); font-weight: 500; }
 .att-left { font-size: 18px; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
 .att-left.warn { color: var(--orange-d); }
 .att-count { font-size: 15px; color: var(--muted); }
+.att-code .code-row { display: flex; align-items: center; justify-content: center; gap: 28px; flex-wrap: wrap; }
+.att-qr { width: 220px; aspect-ratio: 1; display: grid; place-items: center; background: #fff; border-radius: 16px; border: 1.5px solid var(--line); overflow: hidden; flex: none; }
+.att-qr svg { width: 100%; height: 100%; display: block; }
 .att-code:fullscreen { justify-content: center; background: var(--page); gap: 3vh; border-radius: 0; }
-.att-code:fullscreen .digits { gap: 3vw; }
-.att-code:fullscreen .digits i { font-size: 26vh; border-radius: 4vh; }
+.att-code:fullscreen .code-row { gap: 5vw; }
+.att-code:fullscreen .att-qr { width: 62vh; border-radius: 3vh; }
+.att-code:fullscreen .digits { gap: 2vw; }
+.att-code:fullscreen .digits i { font-size: 16vh; border-radius: 3vh; }
 .att-code:fullscreen .att-left, .att-code:fullscreen .att-count, .att-code:fullscreen .muted { font-size: 3.6vh; }
 .att-code:fullscreen [data-act="att-full"] { display: none; }
 .att-sel { width: auto; min-height: 34px; padding: 4px 10px; font-size: 14px; }
