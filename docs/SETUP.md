@@ -188,6 +188,7 @@ SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_xxxxxxxx',
 | login LINE แล้ววนกลับหน้า LINE ไม่จบ | เปิด URL ของ api ในเบราว์เซอร์ ถ้าขึ้น `Missing authorization header` แปลว่ายังไม่ได้ปิด Verify JWT (ขั้นที่ 5 ข้อ 4, 7) |
 | ขึ้น "เกิดข้อผิดพลาดในระบบ" | ยังไม่ได้รัน `schema.sql` หรือรันไม่ครบ ดู log ได้ที่ Edge Functions → api → Logs |
 | แก้ `config.js` แล้วแต่เว็บยังเป็นโหมดทดลอง | ยังไม่ได้ลากโฟลเดอร์ขึ้น Netlify ใหม่ หรือลากไปผิด project ดูขั้นที่ 6 ข้อ 4 |
+| นักเรียนกด "สแกน QR บนจอครู" แล้วขึ้นว่าใช้ได้เมื่อเปิดจากลิงก์ liff.line.me | นักเรียนเปิดลิงก์เว็บ (`.netlify.app`) ตรง ๆ ซึ่งเปิดในเบราว์เซอร์ของ LINE ไม่ใช่ LIFF ให้ส่ง **LIFF URL** (`https://liff.line.me/...`) หรือใช้ปุ่ม Rich Menu แทน (ระบบจะพยายามสลับไปเปิดแบบ LIFF ให้เองหนึ่งครั้ง) |
 | เปิด LIFF แล้วขึ้นหน้าว่างหรือ 404 | Endpoint URL ใน LIFF ไม่ตรงกับ URL ของ Netlify (เช่น เปลี่ยนชื่อ project หลังสร้าง LIFF) |
 
 ---

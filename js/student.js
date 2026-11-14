@@ -2,7 +2,7 @@
 // หน้านักเรียน (index.html): LINE Mini App
 // =========================================================
 import { IS_DEMO } from './config.js';
-import { initLine, inLineApp, scanQr } from './line.js';
+import { initLine, scanQr, scanBlockedReason } from './line.js';
 import { api } from './api.js';
 import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
 import { icon, leaf } from './icons.js';
@@ -38,7 +38,9 @@ async function start() {
   takeQrCode();
   app.innerHTML = loadingHtml('น้องแต่วกำลังมา');
   try {
-    await initLine();
+    // เปิดจากเบราว์เซอร์ในแอป LINE → ส่งต่อไปเปิดแบบ LIFF (พารหัส QR ที่ค้างไว้ไปด้วย)
+    const pending = sessionStorage.getItem(PENDING);
+    await initLine(undefined, { liffQuery: pending ? `?checkin=${pending}` : '' });
     takeQrCode(); // หลัง LIFF แปลง liff.state กลับเป็น ?checkin=
     state.me = await api('me');
     if (!state.me.registered) renderRegister();
@@ -501,10 +503,8 @@ function bindCheckinForm() {
 // สแกน QR ด้วยกล้องในแอป LINE แล้วเช็คชื่อทันที
 // ปุ่มขึ้นตลอด ถ้าสแกนไม่ได้ให้บอกเหตุผล (ไม่ซ่อนปุ่มเฉย ๆ)
 async function scanAndCheckIn() {
-  if (IS_DEMO) return toast('โหมดทดลองสแกน QR ไม่ได้ กรอกรหัส 4 หลักจากจอครูแทนได้', 'error');
-  if (!inLineApp()) {
-    return toast('ปุ่มสแกนใช้ได้เมื่อเปิด Quizzy ในแอป LINE บนมือถือ (ลิงก์ liff.line.me) · ตอนนี้ใช้กล้องมือถือสแกน QR หรือกรอกรหัสแทนได้', 'error');
-  }
+  const blocked = scanBlockedReason();
+  if (blocked) return toast(blocked, 'error');
   try {
     const text = await scanQr();
     if (!text) return; // กดยกเลิก
