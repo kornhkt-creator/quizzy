@@ -4,9 +4,9 @@
 import { IS_DEMO } from './config.js';
 import { initLine, scanQr, scanBlockedReason } from './line.js';
 import { api } from './api.js';
-import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
+import { esc, mascot, loadingHtml, stateHtml, demoBanner, toast, avatarHtml, confirmBox, rewardBox, STAR, fmtDate, fmtDateYear, fmtDuration, attPill } from './ui.js';
 import { icon, leaf } from './icons.js';
-import { checkinFromUrl, codeFromScan } from './qr.js';
+import { checkinFromUrl, codeFromScan, tabFromUrl } from './qr.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -16,6 +16,12 @@ const state = {
   // ระหว่างสอบ
   paper: null, answers: {}, index: 0, offset: 0, timer: null, submitting: false,
 };
+// แต้มจากการเช็คชื่อ (มาทัน / มาสาย): ใช้เมื่อ server ยังไม่ส่ง earned มา (ค่าจริงอยู่ที่ qz_points ใน schema.sql)
+const CHECKIN_POINTS = { present: 10, late: 5 };
+// แต้มสะสม: server คำนวณให้ มากับ me / เช็คชื่อ / ส่งข้อสอบ (server รุ่นเก่าไม่ส่ง = ไม่แสดง)
+const setPoints = (pts) => { if (pts && state.me) state.me.points = pts; };
+const fmtPoints = (n) => Number(n ?? 0).toLocaleString('th-TH');
+const pointsChip = () => (state.me?.points ? `<span class="points-chip" title="แต้มสะสม">${STAR}${fmtPoints(state.me.points.total)}</span>` : '');
 const LETTER = { A: 'ก', B: 'ข', C: 'ค', D: 'ง' };
 
 // ---------- รหัสจาก QR เช็คชื่อ ----------
@@ -31,7 +37,8 @@ function takeQrCode() {
     history.replaceState(null, '', url);
   }
 }
-const firstTab = () => (sessionStorage.getItem(PENDING) ? 'checkin' : 'home');
+// มีรหัสจาก QR → แท็บเช็คชื่อ / ลิงก์ระบุ ?tab= (ปุ่ม Rich Menu) → แท็บนั้น / ปกติ → หน้าแรก
+const firstTab = () => (sessionStorage.getItem(PENDING) ? 'checkin' : tabFromUrl() || 'home');
 
 // ---------- เริ่มต้น ----------
 async function start() {
@@ -40,7 +47,9 @@ async function start() {
   try {
     // เปิดจากเบราว์เซอร์ในแอป LINE → ส่งต่อไปเปิดแบบ LIFF (พารหัส QR ที่ค้างไว้ไปด้วย)
     const pending = sessionStorage.getItem(PENDING);
-    await initLine(undefined, { liffQuery: pending ? `?checkin=${pending}` : '' });
+    const q = new URLSearchParams(location.search);
+    if (pending) q.set('checkin', pending);
+    await initLine(undefined, { liffQuery: q.toString() ? `?${q}` : '' });
     takeQrCode(); // หลัง LIFF แปลง liff.state กลับเป็น ?checkin=
     state.me = await api('me');
     if (!state.me.registered) renderRegister();
@@ -144,6 +153,7 @@ async function renderHome() {
       <div class="list-row" style="padding-top:10px">
         ${avatarHtml(me)}
         <div class="t"><small>สวัสดีครับ</small><b style="font-size:17px;font-weight:600">${esc(me.full_name)}</b></div>
+        ${pointsChip()}
       </div>
       <div id="home-list">${loadingHtml()}</div>
     </div>
@@ -349,7 +359,9 @@ async function submitExam({ auto = false } = {}) {
     const res = await api('submit_exam', { exam_id: examId, answers: state.answers });
     localStorage.removeItem(storeKey(examId));
     state.paper = null;
+    setPoints(res.points);
     renderResult(res.result, true);
+    rewardExam(res.result);
   } catch (err) {
     // ส่งไม่สำเร็จ: คำตอบยังอยู่ในเครื่อง ให้กดส่งใหม่ได้
     state.submitting = false;
@@ -414,6 +426,18 @@ function renderResult(r, justSubmitted = false) {
       ${justSubmitted ? `<p class="center muted" style="font-size:13.5px">${icon('check', 'width:14px;height:14px;vertical-align:-2px;color:var(--green)')} ส่งคำตอบเรียบร้อยแล้ว</p>` : ''}
       <button class="btn btn-primary" data-tab="home">กลับหน้าแรก</button>
     </div>`;
+}
+
+// ป๊อปอัปคะแนนหลังส่งข้อสอบ: ดาว 3 ดวงตามผลงาน
+function rewardExam(r) {
+  const pct = r.percent ?? 0;
+  const stars = pct >= 80 ? 3 : r.passed ? 2 : r.score > 0 ? 1 : 0;
+  return rewardBox({
+    img: stars === 3 ? 'love' : stars ? 'happy' : 'curious',
+    title: stars === 3 ? 'เก่งมากเลย!' : stars === 2 ? 'ผ่านแล้ว เยี่ยมเลย!' : stars ? 'ทำข้อสอบเสร็จแล้ว!' : 'ไม่เป็นไร สู้ใหม่นะ!',
+    amount: r.score, unit: 'คะแนน', from: `จากข้อสอบ ${r.exam_title}`,
+    stars, of: 3, ok: stars ? 'รับคะแนน' : 'ดูผลคะแนน', total: state.me.points?.total,
+  });
 }
 
 // ---------- ผลสอบของฉัน ----------
@@ -545,6 +569,14 @@ async function checkIn(form) {
         <button class="btn btn-secondary btn-sm" data-act="att-again" style="margin:4px auto 0;width:auto">เช็คชื่อคาบอื่น</button>
       </div>`;
     loadAttHistory();
+    if (r.result === 'ok') {
+      setPoints(r.points);
+      rewardBox({
+        img: late ? 'wink' : 'love', title: late ? 'มาสายนิดหน่อย แต่ได้แต้มนะ' : 'เช็คชื่อสำเร็จ!',
+        amount: r.earned ?? CHECKIN_POINTS[r.status] ?? 0, from: `จากการเช็คชื่อ ${r.title}`,
+        total: state.me.points?.total,
+      });
+    }
   } catch (err) {
     toast(err.message, 'error');
   } finally {
@@ -593,6 +625,13 @@ function renderProfile() {
         <div style="font-size:19px;font-weight:600;margin-top:10px">${esc(me.full_name)}</div>
         <div class="muted" style="font-size:14px">รหัสนักเรียน ${esc(me.student_code || '-')}</div>
       </div>
+      ${me.points ? `
+      <div class="card center" style="padding:16px">
+        <div class="muted" style="font-size:13px">แต้มสะสม</div>
+        <div style="display:flex;justify-content:center;align-items:center;gap:8px;font-size:34px;font-weight:700;color:var(--brown);line-height:1.2">
+          <span class="points-star">${STAR}</span>${fmtPoints(me.points.total)}</div>
+        <div class="mini-stats"><div><b>${fmtPoints(me.points.checkin)}</b>จากการเช็คชื่อ</div><div><b>${fmtPoints(me.points.exam)}</b>จากข้อสอบ</div></div>
+      </div>` : ''}
       <div class="card" style="padding:4px 14px">
         <div class="list-row" style="padding:12px 0;border-bottom:1px solid var(--line)"><span class="t muted">ชื่อใน LINE</span><span>${esc(me.display_name || '-')}</span></div>
         <div class="list-row" style="padding:12px 0"><span class="t muted">ลงทะเบียนเมื่อ</span><span>${fmtDateYear(me.created_at)}</span></div>

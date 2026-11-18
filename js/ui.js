@@ -83,6 +83,51 @@ export function avatarHtml(profile, cls = '') {
   return `<div class="avatar ${cls}">${pic ? `<img src="${esc(pic)}" alt="">` : esc(name.charAt(0) || '?')}</div>`;
 }
 
+// ---------- ป๊อปอัปรับแต้ม/คะแนน (ดาวเด้งขึ้น) ----------
+// stars = จำนวนดาวที่ได้, of = จำนวนดาวทั้งหมด (of = 1 จะเป็นเหรียญดาวใหญ่เหรียญเดียว)
+export const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.6 2.9 6 6.6 1-4.8 4.6 1.1 6.6L12 17.7l-5.8 3.1 1.1-6.6L2.5 9.6l6.6-1z"/></svg>';
+// total = แต้มสะสมหลังรับครั้งนี้ (ไม่ส่งมา = ไม่แสดง)
+export function rewardBox({ img = 'happy', title, amount = 0, unit = 'แต้ม', from = '', stars = 1, of = 1, ok = 'รับแต้ม', total = null }) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'overlay center reward';
+    const burst = stars > 0
+      ? Array.from({ length: 10 }, (_, i) => {
+        const a = (i / 10) * Math.PI * 2 + 0.3;
+        const d = 70 + (i % 3) * 22;
+        return `<i style="--x:${Math.round(Math.cos(a) * d)}px;--y:${Math.round(Math.sin(a) * d)}px;--d:${(i % 4) * 0.05}s">${STAR}</i>`;
+      }).join('')
+      : '';
+    wrap.innerHTML = `
+      <div class="sheet" role="dialog" aria-modal="true">
+        <img class="mascot" src="${mascot(img)}" alt="">
+        <div class="reward-stars${of === 1 ? ' one' : ''}">
+          <div class="reward-burst">${burst}</div>
+          ${Array.from({ length: of }, (_, i) => `<span class="reward-star${i < stars ? ' on' : ''}" style="--i:${i}">${STAR}</span>`).join('')}
+        </div>
+        <h3>${esc(title)}</h3>
+        <div class="reward-amount">+<span>0</span> <small>${esc(unit)}</small></div>
+        ${from ? `<p class="muted" style="font-size:14px">${esc(from)}</p>` : ''}
+        ${total != null ? `<div class="points-chip" style="margin-top:10px">${STAR}แต้มสะสม ${Number(total).toLocaleString('th-TH')}</div>` : ''}
+        <div class="row"><button class="btn btn-primary">${esc(ok)}</button></div>
+      </div>`;
+    // ตัวเลขวิ่งขึ้น
+    const num = wrap.querySelector('.reward-amount span');
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const t0 = performance.now();
+    const step = (t) => {
+      const k = still ? 1 : Math.min(1, Math.max(0, (t - t0 - 350) / 700));
+      num.textContent = Math.round(amount * (1 - (1 - k) ** 3));
+      if (k < 1 && wrap.isConnected) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    const close = () => { wrap.remove(); resolve(); };
+    wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('button')) close(); });
+    document.body.appendChild(wrap);
+    wrap.querySelector('button').focus();
+  });
+}
+
 // ---------- สถานะการเช็คชื่อ ----------
 export const ATT_STATUS = {
   present: ['green', 'มา'],

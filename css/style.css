@@ -220,6 +220,28 @@ button.card.list-row { width: 100%; border: 0; text-align: left; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes up { from { transform: translateY(30px); opacity: .5; } }
 
+/* ---------- ป๊อปอัปรับแต้ม (ดาวเด้งขึ้น) ---------- */
+.reward .sheet { padding-top: 18px; }
+.reward-stars { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: 8px; margin: 6px 0 10px; }
+.reward-star { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: #F0EFEA; }
+.reward-star svg { width: 62%; fill: #D6D4CA; }
+.reward-star:nth-child(3) { width: 68px; height: 68px; }
+.reward-stars.one .reward-star { width: 84px; height: 84px; }
+.reward-star.on { background: radial-gradient(circle at 35% 30%, #FFC76B, var(--orange)); box-shadow: 0 6px 14px rgba(245, 154, 56, .4), inset 0 -4px 0 rgba(0, 0, 0, .08); animation: star-pop .55s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(.15s + var(--i) * .22s); }
+.reward-star.on svg { fill: #fff; }
+.reward-burst { position: absolute; left: 50%; top: 50%; pointer-events: none; }
+.reward-burst i { position: absolute; width: 16px; height: 16px; margin: -8px; opacity: 0; animation: star-fly 1s ease-out both; animation-delay: calc(.3s + var(--d)); }
+.reward-burst svg { width: 100%; fill: #FFC23D; display: block; }
+.reward-amount { font-size: 46px; font-weight: 700; color: var(--brown); line-height: 1.15; }
+.points-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px 4px 8px; border-radius: var(--pill); background: var(--orange-soft); color: var(--orange-d); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.points-chip svg { width: 18px; height: 18px; fill: var(--orange); flex: none; }
+.points-star { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #FFC76B, var(--orange)); }
+.points-star svg { width: 62%; fill: #fff; }
+.reward-amount small { font-size: 24px; font-weight: 600; }
+@keyframes star-pop { from { transform: scale(0) rotate(-140deg); opacity: 0; } }
+@keyframes star-fly { 0% { transform: translate(0, 0) scale(.3); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(var(--x), var(--y)) scale(1) rotate(160deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .reward-star.on, .reward-burst i { animation: none; } }
+
 /* ---------- ผลคะแนน ---------- */
 .sun { position: relative; height: 300px; flex: none; overflow: hidden; background: repeating-conic-gradient(from 0deg at 50% 62%, #FFF1D2 0deg 10deg, #FFE6BB 10deg 20deg); }
 .sun::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 62%, rgba(255, 255, 255, .9) 0, rgba(255, 255, 255, 0) 45%); }

@@ -51,6 +51,9 @@ export default async function (ctx) {
     assert.equal(r.result, 'ok');
     assert.equal(r.status, 'present');
     assert.equal(r.title, 'ม.4/1 คาบ 2');
+    assert.equal(r.earned, 10, 'มาทันได้ 10 แต้ม');
+    assert.equal(r.points.checkin, 10);
+    assert.equal(r.points.total, r.points.checkin + r.points.exam);
     const again = await api('api_att_checkin', 'U-stu1', s.code);
     assert.equal(again.result, 'already');
     assert.equal(again.status, 'present');
@@ -66,6 +69,8 @@ export default async function (ctx) {
     await asService(`update att_sessions set late_at = now() - interval '1 minute', opens_at = now() - interval '12 minutes' where id = $1`, [s.id]);
     const r = await api('api_att_checkin', 'U-stu4', s.code);
     assert.equal(r.status, 'late');
+    assert.equal(r.earned, 5, 'มาสายได้ 5 แต้ม');
+    assert.equal(r.points.checkin, 5);
   });
 
   await test('ใส่รหัสผิด 5 ครั้งใน 10 นาที ต้องรอ (ถึงรหัสถูกก็ยังเช็คไม่ได้)', async () => {
@@ -150,6 +155,19 @@ export default async function (ctx) {
     await api('api_att_delete', 'U-teach', ctx.att2.id);
     await rejects(api('api_att_detail', 'U-teach', ctx.att2.id), /ไม่พบคาบ/);
     await rejects(api('api_att_delete', 'U-teach', ctx.att2.id), /ไม่พบคาบ/);
+  });
+
+  await test('แต้มสะสม: คิดจากสถานะเช็คชื่อล่าสุด + คะแนนข้อสอบที่ส่งแล้ว และมากับ api_me', async () => {
+    // U-stu4: ครูแก้เป็น "สาย" (5 แต้ม) · คาบ 3 ถูกลบแล้ว · U-stu1: "มา" (10 แต้ม)
+    for (const [uid, checkin] of [['U-stu4', 5], ['U-stu1', 10]]) {
+      const [{ pts, exam }] = await asService(
+        `select qz_points(p.id) as pts,
+                (select coalesce(sum(score), 0)::int from attempts a where a.profile_id = p.id and a.submitted_at is not null) as exam
+         from profiles p where p.line_user_id = $1`, [uid]);
+      assert.deepEqual(pts, { total: checkin + exam, checkin, exam });
+    }
+    const me = await api('api_me', 'U-stu5', 'Guess', null);
+    assert.deepEqual(me.points, { total: 5, checkin: 5, exam: 0 });
   });
 
   await test('anon เรียก api_att_* และอ่านตารางเช็คชื่อตรงไม่ได้', async () => {

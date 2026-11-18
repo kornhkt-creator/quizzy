@@ -124,6 +124,21 @@ returns jsonb language sql immutable as $$
     'registered', r.full_name is not null, 'created_at', r.created_at)
 $$;
 
+-- แต้มสะสมของนักเรียน: คิดจากข้อมูลจริงทุกครั้ง (ไม่มีตารางแต้มแยก)
+--   เช็คชื่อ: มา 10 แต้ม, สาย 5 แต้ม · ข้อสอบ: เท่ากับคะแนนที่ได้
+-- ครูแก้สถานะเช็คชื่อหรือลบคาบ/ชุดสอบ แต้มจะเปลี่ยนตามเอง
+-- (เป็น plpgsql เพราะตาราง att_records ถูกสร้างทีหลังในไฟล์นี้)
+create or replace function public.qz_points(p_profile_id uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare v_checkin int; v_exam int;
+begin
+  select coalesce(sum(case status when 'present' then 10 when 'late' then 5 else 0 end), 0) into v_checkin
+  from att_records where profile_id = p_profile_id;
+  select coalesce(sum(score), 0) into v_exam
+  from attempts where profile_id = p_profile_id and submitted_at is not null;
+  return jsonb_build_object('total', v_checkin + v_exam, 'checkin', v_checkin, 'exam', v_exam);
+end $$;
+
 -- =========================================================
 -- API: ผู้ใช้
 -- =========================================================
@@ -138,7 +153,7 @@ begin
   on conflict (line_user_id) do update
     set display_name = excluded.display_name, picture_url = excluded.picture_url
   returning * into r;
-  return qz_profile_json(r);
+  return qz_profile_json(r) || jsonb_build_object('points', qz_points(r.id));
 end $$;
 
 -- ลงทะเบียนครั้งแรก (ทำได้ครั้งเดียว ถ้าต้องแก้ ให้ครูแก้ใน Table Editor)
@@ -159,7 +174,7 @@ begin
   end if;
 
   update profiles set full_name = v_name, student_code = v_code where id = r.id returning * into r;
-  return qz_profile_json(r);
+  return qz_profile_json(r) || jsonb_build_object('points', qz_points(r.id));
 end $$;
 
 -- =========================================================
@@ -477,7 +492,7 @@ begin
   select * into a from attempts where exam_id = e.id and profile_id = p.id for update;
   if not found then raise exception 'ยังไม่ได้เริ่มสอบชุดนี้'; end if;
   if a.submitted_at is not null then
-    return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e));
+    return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e), 'points', qz_points(p.id));
   end if;
 
   -- เก็บเฉพาะคำตอบของข้อในชุดนี้ และเป็นตัวเลือกที่มีอยู่จริง
@@ -497,7 +512,7 @@ begin
     submitted_at = now(), answers = v_clean, score = v_score, max_score = v_max,
     correct_count = v_correct, is_late = now() > a.deadline_at + interval '60 seconds'
   where id = a.id returning * into a;
-  return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e));
+  return jsonb_build_object('status', 'submitted', 'result', qz_attempt_json(a, e), 'points', qz_points(p.id));
 end $$;
 
 -- =========================================================
@@ -792,7 +807,8 @@ begin
     select * into r from att_records where session_id = s.id and profile_id = p.id;
     return jsonb_build_object('result', 'already', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title);
   end if;
-  return jsonb_build_object('result', 'ok', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title);
+  return jsonb_build_object('result', 'ok', 'status', r.status, 'checked_at', r.checked_at, 'title', s.title,
+    'earned', case r.status when 'present' then 10 when 'late' then 5 else 0 end, 'points', qz_points(p.id));
 end $$;
 
 -- ประวัติการเข้าเรียนของนักเรียน

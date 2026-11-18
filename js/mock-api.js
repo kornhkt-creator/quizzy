@@ -95,6 +95,13 @@ function profileJson(p) {
     student_code: p.student_code, role: p.role, registered: p.full_name != null, created_at: p.created_at,
   };
 }
+// แต้มสะสม: เช็คชื่อ (มา 10, สาย 5) + คะแนนข้อสอบที่ส่งแล้ว (ให้ตรงกับ qz_points ใน schema.sql)
+const CHECKIN_POINTS = { present: 10, late: 5 };
+function pointsJson(db, p) {
+  const checkin = db.att_records.filter((r) => r.profile_id === p.id).reduce((s, r) => s + (CHECKIN_POINTS[r.status] ?? 0), 0);
+  const exam = db.attempts.filter((a) => a.profile_id === p.id && a.submitted_at).reduce((s, a) => s + (a.score ?? 0), 0);
+  return { total: checkin + exam, checkin, exam };
+}
 function myProfile(db) {
   return db.profiles.find((p) => p.line_user_id === ME.line) || fail('ไม่พบบัญชีผู้ใช้ กรุณาเปิดแอปใหม่อีกครั้ง');
 }
@@ -210,7 +217,7 @@ const H = {
       p = { id: uuid(), line_user_id: ME.line, display_name: ME.name, picture_url: null, full_name: null, student_code: null, role: 'student', created_at: nowIso() };
       db.profiles.push(p);
     }
-    return profileJson(p);
+    return { ...profileJson(p), points: pointsJson(db, p) };
   },
 
   register(db, d) {
@@ -223,7 +230,7 @@ const H = {
     if (code && code.length > 30) fail('รหัสนักเรียนยาวเกินไป');
     if (code && db.profiles.some((x) => x.student_code === code && x.id !== p.id)) fail('รหัสนักเรียนนี้ถูกใช้แล้ว ถ้าเป็นรหัสของคุณจริงให้แจ้งครู');
     Object.assign(p, { full_name: name, student_code: code });
-    return profileJson(p);
+    return { ...profileJson(p), points: pointsJson(db, p) };
   },
 
   // ---------- ครู: จัดการชุดสอบ ----------
@@ -391,7 +398,7 @@ const H = {
     const p = student(db);
     const e = findExam(db, d.exam_id);
     const a = db.attempts.find((x) => x.exam_id === e.id && x.profile_id === p.id) || fail('ยังไม่ได้เริ่มสอบชุดนี้');
-    if (a.submitted_at) return { status: 'submitted', result: attemptJson(db, a, e) };
+    if (a.submitted_at) return { status: 'submitted', result: attemptJson(db, a, e), points: pointsJson(db, p) };
     const given = d.answers && typeof d.answers === 'object' ? d.answers : {};
     const qs = examQuestions(db, e.id);
     const clean = {};
@@ -405,7 +412,7 @@ const H = {
       max_score: qs.reduce((s, q) => s + q.points, 0), correct_count: right.length,
       is_late: Date.now() > Date.parse(a.deadline_at) + 60e3,
     });
-    return { status: 'submitted', result: attemptJson(db, a, e) };
+    return { status: 'submitted', result: attemptJson(db, a, e), points: pointsJson(db, p) };
   },
 
   // ---------- เช็คชื่อเข้าเรียน ----------
@@ -511,7 +518,7 @@ const H = {
     if (r) return { result: 'already', status: r.status, checked_at: r.checked_at, title: s.title };
     const rec = { session_id: s.id, profile_id: p.id, status: now > Date.parse(s.late_at) ? 'late' : 'present', checked_at: nowIso(), edited: false };
     db.att_records.push(rec);
-    return { result: 'ok', status: rec.status, checked_at: rec.checked_at, title: s.title };
+    return { result: 'ok', status: rec.status, checked_at: rec.checked_at, title: s.title, earned: CHECKIN_POINTS[rec.status] ?? 0, points: pointsJson(db, p) };
   },
 
   att_history(db) {
