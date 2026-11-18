@@ -42,12 +42,23 @@ export function checkinFromUrl() {
   return codeFromSearch(location.search);
 }
 
-function codeFromSearch(search) {
+// อ่านค่าจาก query ทั้งแบบปกติ และแบบที่ LINE ห่อไว้ใน liff.state (ก่อน LIFF redirect)
+function param(search, name) {
   const params = new URLSearchParams(search);
-  let code = params.get('checkin');
   const state = params.get('liff.state');
-  if (!code && state) code = new URLSearchParams(state.split('?')[1] || '').get('checkin');
+  return params.get(name) ?? (state ? new URLSearchParams(state.split('?')[1] || '').get(name) : null);
+}
+
+function codeFromSearch(search) {
+  const code = param(search, 'checkin');
   return /^\d{4}$/.test(code || '') ? code : null;
+}
+
+// แท็บที่ลิงก์ขอให้เปิด เช่น ?tab=checkin (ใช้กับปุ่ม Rich Menu)
+const TABS = ['home', 'checkin', 'history', 'profile'];
+export function tabFromUrl() {
+  const tab = param(location.search, 'tab');
+  return TABS.includes(tab) ? tab : null;
 }
 
 // ข้อความที่สแกนได้จาก QR → รหัสเช็คชื่อ (รับทั้งลิงก์เช็คชื่อ และตัวเลข 4 หลักล้วน)
